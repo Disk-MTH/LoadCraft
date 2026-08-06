@@ -11,8 +11,9 @@ LDLIBS   = -lm
 
 BUILD   = build
 FW      = ../firmware/handbrake
-SOURCES = $(FW)/hb_core.c $(FW)/hb_protocol.c
-BINS    = $(BUILD)/test_hb_core $(BUILD)/test_hb_protocol
+SOURCES = $(FW)/hb_core.c $(FW)/hb_protocol.c $(FW)/hb_record.c
+BINS    = $(BUILD)/test_hb_core $(BUILD)/test_hb_protocol \
+          $(BUILD)/test_hb_record
 
 .PHONY: all test clean
 all: $(BINS)
