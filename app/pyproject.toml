@@ -1,0 +1,32 @@
+[project]
+name = "handbrake-tuner"
+version = "0.1.0"
+description = "App de calibration du handbrake de simracing"
+requires-python = ">=3.9"
+dependencies = [
+    "pyserial>=3.5",
+    "flask>=3.0",
+]
+
+[project.optional-dependencies]
+# Fenêtre native. Sans cette extra, l'app bascule sur le navigateur par
+# défaut : utile en dépannage, et évite d'imposer les dépendances système de
+# pywebview (WebKitGTK sous Linux) à qui n'en veut pas.
+desktop = ["pywebview>=5.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+handbrake-tuner = "handbrake_tuner.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["handbrake_tuner*"]
+
+[tool.setuptools.package-data]
+handbrake_tuner = ["web/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

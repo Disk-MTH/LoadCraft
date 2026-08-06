@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibration du handbrake</title>
+<style>
+  :root {
+    --bg: #12151a;
+    --panel: #1a1e26;
+    --panel-alt: #21262f;
+    --line: #2c323d;
+    --text: #e4e8ef;
+    --muted: #8b95a7;
+    --accent: #4da3ff;
+    --accent-dim: #2d6ba8;
+    --ok: #45c37a;
+    --warn: #e0a33e;
+    --err: #e05c5c;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin: 0 0 20px;
+    color: var(--muted);
+  }
+
+  h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .layout { display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
+  @media (min-width: 860px) { .layout { grid-template-columns: 1fr 1fr; } }
+  .span-2 { grid-column: 1 / -1; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  /* --- Connexion --- */
+  .connect-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  select, button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  select { flex: 1; min-width: 200px; cursor: default; }
+  button:hover:not(:disabled) { border-color: var(--accent-dim); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent-dim); }
+  button.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+
+  /* --- Mesure temps réel --- */
+  .readouts { display: flex; gap: 28px; margin-bottom: 16px; flex-wrap: wrap; }
+  .readout .label {
+    font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .readout .value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .bar {
+    height: 30px;
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    transition: width .05s linear;
+  }
+  .bar-pct {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 12px;
+    text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  }
+
+  /* --- Calibration --- */
+  .calib-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .calib-row:last-of-type { border-bottom: none; }
+  .calib-row .name { width: 74px; color: var(--muted); font-size: 13px; }
+  .calib-row .stored {
+    flex: 1; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .hint { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+
+  /* --- Courbe --- */
+  .curve-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .curve-tabs button { flex: 1; font-size: 13px; }
+  .curve-tabs button[aria-pressed="true"] {
+    background: var(--accent-dim); border-color: var(--accent-dim);
+  }
+  .gamma-row { display: flex; align-items: center; gap: 12px; }
+  .gamma-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .gamma-value {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    min-width: 48px; text-align: right;
+  }
+  #curve-canvas {
+    width: 100%; height: 200px; display: block; margin-top: 14px;
+    background: var(--panel-alt);
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .gamma-note { color: var(--muted); font-size: 12px; margin: 10px 0 0; min-height: 32px; }
+
+  /* --- Persistance --- */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .dirty-flag { color: var(--warn); font-size: 12px; margin-top: 12px; min-height: 18px; }
+
+  /* --- Statut --- */
+  #status {
+    margin-top: 16px; padding: 10px 14px; border-radius: 6px;
+    font-size: 13px; min-height: 40px;
+    background: var(--panel); border: 1px solid var(--line);
+  }
+  #status.ok  { color: var(--ok);   border-color: #2a5a3f; }
+  #status.err { color: var(--err);  border-color: #6a3232; }
+  .offline { opacity: .45; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <h1 class="span-2">Handbrake — calibration</h1>
+
+  <section class="panel span-2">
+    <h2>Connexion</h2>
+    <div class="connect-row">
+      <select id="ports"><option value="">Recherche des ports…</option></select>
+      <button id="refresh">Actualiser</button>
+      <button id="connect" class="primary">Connecter</button>
+      <button id="disconnect" disabled>Déconnecter</button>
+    </div>
+  </section>
+
+  <section class="panel span-2" id="live-panel">
+    <h2>Mesure</h2>
+    <div class="readouts">
+      <div class="readout">
+        <div class="label">Valeur brute</div>
+        <div class="value" id="raw">—</div>
+      </div>
+      <div class="readout">
+        <div class="label">Axe HID</div>
+        <div class="value" id="axis">—</div>
+      </div>
+      <div class="readout">
+        <div class="label">Sortie</div>
+        <div class="value" id="out">—</div>
+      </div>
+    </div>
+    <div class="bar"><div class="bar-fill" id="bar"></div><div class="bar-pct" id="bar-pct"></div></div>
+  </section>
+
+  <section class="panel" id="calib-panel">
+    <h2>Plage</h2>
+    <div class="calib-row">
+      <span class="name">Minimum</span>
+      <span class="stored" id="cfg-min">—</span>
+      <button id="set-min">Définir ici</button>
+    </div>
+    <div class="calib-row">
+      <span class="name">Maximum</span>
+      <span class="stored" id="cfg-max">—</span>
+      <button id="set-max">Définir ici</button>
+    </div>
+    <p class="hint">
+      Levier au repos, cliquez « Définir ici » sur la ligne Minimum. Puis
+      tirez à la force que vous voulez voir correspondre au frein à fond, et
+      cliquez sur la ligne Maximum.
+    </p>
+  </section>
+
+  <section class="panel" id="curve-panel">
+    <h2>Courbe de réponse</h2>
+    <div class="curve-tabs">
+      <button data-curve="LINEAR" aria-pressed="false">Linéaire</button>
+      <button data-curve="POWER" aria-pressed="false">Puissance</button>
+      <button data-curve="SCURVE" aria-pressed="false">Courbe en S</button>
+    </div>
+    <div class="gamma-row">
+      <span style="color:var(--muted)">gamma</span>
+      <input type="range" id="gamma" min="0.10" max="5.00" step="0.05" value="1.00">
+      <span class="gamma-value" id="gamma-value">1.00</span>
+    </div>
+    <p class="gamma-note" id="gamma-note"></p>
+    <canvas id="curve-canvas" width="600" height="400"></canvas>
+  </section>
+
+  <section class="panel span-2" id="persist-panel">
+    <h2>Enregistrement</h2>
+    <div class="actions">
+      <button id="save" class="primary">Sauvegarder dans la carte</button>
+      <button id="load">Recharger le dernier enregistrement</button>
+      <button id="reset">Valeurs par défaut</button>
+    </div>
+    <div class="dirty-flag" id="dirty"></div>
+    <p class="hint">
+      Les réglages agissent immédiatement mais restent en mémoire vive. Sans
+      sauvegarde, ils sont perdus au débranchement — l'EEPROM n'est écrite que
+      sur demande, pour ne pas l'user à chaque mouvement du curseur.
+    </p>
+  </section>
+
+  <div class="span-2" id="status">Non connecté.</div>
+</div>
+
+<script>
+"use strict";
+
+const el = (id) => document.getElementById(id);
+
+const state = {
+  connected: false,
+  config: null,
+  telemetry: null,
+  dirty: false,
+  events: null,
+};
+
+const GAMMA_NOTES = {
+  LINEAR: "Sortie proportionnelle à la force. Le point de repère neutre.",
+  POWER: "gamma < 1 : mordant dès le début de course. " +
+         "gamma > 1 : progressif, plus de précision en début de course.",
+  SCURVE: "gamma > 1 : doux aux extrémités, franc au milieu. " +
+          "gamma < 1 : l'inverse.",
+};
+
+/* --- Appels API ---------------------------------------------------------- */
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `erreur ${response.status}`);
+  }
+  return payload;
+}
+
+const post = (path, body) => api(path, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body || {}),
+});
+
+function setStatus(message, kind) {
+  const node = el("status");
+  node.textContent = message;
+  node.className = kind || "";
+}
+
+async function guard(action, successMessage) {
+  try {
+    const result = await action();
+    if (successMessage) setStatus(successMessage, "ok");
+    return result;
+  } catch (error) {
+    setStatus(error.message, "err");
+    return null;
+  }
+}
+
+/* --- Rendu --------------------------------------------------------------- */
+
+function renderConnection() {
+  el("connect").disabled = state.connected;
+  el("disconnect").disabled = !state.connected;
+  el("ports").disabled = state.connected;
+
+  for (const id of ["live-panel", "calib-panel", "curve-panel", "persist-panel"]) {
+    el(id).classList.toggle("offline", !state.connected);
+  }
+}
+
+function renderConfig() {
+  const config = state.config;
+  if (!config) return;
+
+  el("cfg-min").textContent = config.raw_min.toLocaleString("fr-FR");
+  el("cfg-max").textContent = config.raw_max.toLocaleString("fr-FR");
+
+  for (const button of document.querySelectorAll(".curve-tabs button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.curve === config.curve));
+  }
+
+  el("gamma").value = config.gamma.toFixed(2);
+  el("gamma-value").textContent = config.gamma.toFixed(2);
+  el("gamma").disabled = config.curve === "LINEAR";
+  el("gamma-note").textContent = GAMMA_NOTES[config.curve] || "";
+
+  if (!config.calibrated) {
+    setStatus(
+      "Carte non calibrée : réglez d'abord le minimum et le maximum.",
+      "err"
+    );
+  }
+  drawCurve();
+}
+
+function renderTelemetry() {
+  const telemetry = state.telemetry;
+  if (!telemetry) return;
+
+  el("raw").textContent = telemetry.raw.toLocaleString("fr-FR");
+  el("axis").textContent = telemetry.axis;
+  el("out").textContent = telemetry.out.toFixed(3);
+
+  const percent = telemetry.out * 100;
+  el("bar").style.width = percent + "%";
+  el("bar-pct").textContent = percent.toFixed(1) + " %";
+  drawCurve();
+}
+
+function setDirty(value) {
+  state.dirty = value;
+  el("dirty").textContent = value
+    ? "Modifications non sauvegardées dans la carte."
+    : "";
+}
+
+/* --- Tracé de la courbe --------------------------------------------------- */
+
+/* Miroir de hb_curve_apply (firmware) et de protocol.apply_curve (serveur) :
+   l'aperçu doit montrer exactement ce que la carte calcule. */
+function applyCurve(curve, gamma, t) {
+  t = Math.max(0, Math.min(1, t));
+  if (curve === "POWER") return Math.pow(t, gamma);
+  if (curve === "SCURVE") {
+    return t < 0.5
+      ? 0.5 * Math.pow(2 * t, gamma)
+      : 1 - 0.5 * Math.pow(2 * (1 - t), gamma);
+  }
+  return t;
+}
+
+function currentPosition() {
+  const config = state.config;
+  const telemetry = state.telemetry;
+  if (!config || !telemetry) return null;
+
+  const span = config.raw_max - config.raw_min;
+  if (span === 0) return null;
+  const t = Math.max(0, Math.min(1, (telemetry.raw - config.raw_min) / span));
+  return { t, out: telemetry.out };
+}
+
+function drawCurve() {
+  const canvas = el("curve-canvas");
+  const context = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = 28;
+
+  const curve = state.config ? state.config.curve : "LINEAR";
+  const gamma = parseFloat(el("gamma").value);
+
+  const x = (t) => pad + t * (width - 2 * pad);
+  const y = (v) => height - pad - v * (height - 2 * pad);
+
+  context.clearRect(0, 0, width, height);
+
+  // Grille au quart
+  context.strokeStyle = "#2c323d";
+  context.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const f = i / 4;
+    context.beginPath();
+    context.moveTo(x(f), y(0)); context.lineTo(x(f), y(1));
+    context.moveTo(x(0), y(f)); context.lineTo(x(1), y(f));
+    context.stroke();
+  }
+
+  // Diagonale de référence : repère visuel de la réponse linéaire
+  context.strokeStyle = "#3a424f";
+  context.setLineDash([5, 5]);
+  context.beginPath();
+  context.moveTo(x(0), y(0));
+  context.lineTo(x(1), y(1));
+  context.stroke();
+  context.setLineDash([]);
+
+  // Courbe
+  context.strokeStyle = "#4da3ff";
+  context.lineWidth = 2.5;
+  context.beginPath();
+  for (let i = 0; i <= 100; i++) {
+    const t = i / 100;
+    const point = applyCurve(curve, gamma, t);
+    if (i === 0) context.moveTo(x(t), y(point));
+    else context.lineTo(x(t), y(point));
+  }
+  context.stroke();
+
+  // Position courante
+  const position = currentPosition();
+  if (position) {
+    context.strokeStyle = "#45c37a";
+    context.lineWidth = 1;
+    context.setLineDash([3, 3]);
+    context.beginPath();
+    context.moveTo(x(position.t), y(0)); context.lineTo(x(position.t), y(position.out));
+    context.moveTo(x(0), y(position.out)); context.lineTo(x(position.t), y(position.out));
+    context.stroke();
+    context.setLineDash([]);
+
+    context.fillStyle = "#45c37a";
+    context.beginPath();
+    context.arc(x(position.t), y(position.out), 5, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // Repères d'axes
+  context.fillStyle = "#8b95a7";
+  context.font = "11px system-ui, sans-serif";
+  context.fillText("force →", x(0.5) - 20, height - 8);
+  context.save();
+  context.translate(11, y(0.5) + 22);
+  context.rotate(-Math.PI / 2);
+  context.fillText("sortie →", 0, 0);
+  context.restore();
+}
+
+/* --- Flux temps réel ------------------------------------------------------ */
+
+function openStream() {
+  closeStream();
+  state.events = new EventSource("/api/stream");
+  state.events.onmessage = (event) => {
+    state.telemetry = JSON.parse(event.data);
+    renderTelemetry();
+  };
+  state.events.onerror = () => {
+    /* EventSource se reconnecte seul ; inutile d'alarmer l'utilisateur à
+       chaque hoquet. Une vraie perte de carte remonte via les commandes. */
+  };
+}
+
+function closeStream() {
+  if (state.events) {
+    state.events.close();
+    state.events = null;
+  }
+}
+
+/* --- Actions -------------------------------------------------------------- */
+
+async function refreshPorts() {
+  const data = await guard(() => api("/api/ports"));
+  if (!data) return;
+
+  const select = el("ports");
+  const previous = select.value;
+  select.innerHTML = "";
+
+  if (data.ports.length === 0) {
+    select.innerHTML = '<option value="">Aucun port détecté</option>';
+    return;
+  }
+  for (const port of data.ports) {
+    const option = document.createElement("option");
+    option.value = port.device;
+    option.textContent = port.description
+      ? `${port.device} — ${port.description}`
+      : port.device;
+    select.appendChild(option);
+  }
+  if (previous) select.value = previous;
+}
+
+function adoptStatus(data) {
+  state.connected = data.connected;
+  state.config = data.config;
+  state.telemetry = data.telemetry;
+  renderConnection();
+  renderConfig();
+  renderTelemetry();
+}
+
+async function connect() {
+  const port = el("ports").value;
+  if (!port) {
+    setStatus("Sélectionnez un port.", "err");
+    return;
+  }
+  setStatus("Connexion…");
+  const data = await guard(() => post("/api/connect", { port }));
+  if (!data) return;
+
+  adoptStatus(data);
+  setDirty(false);
+  openStream();
+  if (data.config && data.config.calibrated) {
+    setStatus(`Connecté sur ${data.port}.`, "ok");
+  }
+}
+
+async function disconnect() {
+  closeStream();
+  const data = await guard(() => post("/api/disconnect"));
+  if (data) adoptStatus(data);
+  setDirty(false);
+  setStatus("Déconnecté.");
+}
+
+function adoptConfig(data, message) {
+  if (!data) return;
+  state.config = data.config;
+  renderConfig();
+  setDirty(true);
+  if (message) setStatus(message, "ok");
+}
+
+/* --- Branchements --------------------------------------------------------- */
+
+el("refresh").addEventListener("click", refreshPorts);
+el("connect").addEventListener("click", connect);
+el("disconnect").addEventListener("click", disconnect);
+
+el("set-min").addEventListener("click", async () => {
+  adoptConfig(
+    await guard(() => post("/api/calibrate/min")),
+    "Minimum enregistré en mémoire vive."
+  );
+});
+
+el("set-max").addEventListener("click", async () => {
+  adoptConfig(
+    await guard(() => post("/api/calibrate/max")),
+    "Maximum enregistré en mémoire vive."
+  );
+});
+
+for (const button of document.querySelectorAll(".curve-tabs button")) {
+  button.addEventListener("click", async () => {
+    const curve = button.dataset.curve;
+    adoptConfig(
+      await guard(() => post("/api/curve", {
+        curve,
+        gamma: parseFloat(el("gamma").value),
+      })),
+      `Courbe : ${button.textContent}.`
+    );
+  });
+}
+
+/* Le curseur redessine l'aperçu à chaque pixel, mais n'écrit sur le port
+   série qu'au relâchement : envoyer à chaque mouvement saturerait la liaison
+   sans rien apporter de perceptible. */
+el("gamma").addEventListener("input", () => {
+  el("gamma-value").textContent = parseFloat(el("gamma").value).toFixed(2);
+  drawCurve();
+});
+
+el("gamma").addEventListener("change", async () => {
+  adoptConfig(
+    await guard(() => post("/api/gamma", { gamma: parseFloat(el("gamma").value) }))
+  );
+});
+
+el("save").addEventListener("click", async () => {
+  const data = await guard(() => post("/api/save"));
+  if (!data) return;
+  state.config = data.config;
+  renderConfig();
+  setDirty(false);
+  setStatus("Configuration écrite dans la carte.", "ok");
+});
+
+el("load").addEventListener("click", async () => {
+  const data = await guard(() => post("/api/load"));
+  if (!data) return;
+  state.config = data.config;
+  renderConfig();
+  setDirty(false);
+  setStatus("Dernier enregistrement rechargé.", "ok");
+});
+
+el("reset").addEventListener("click", async () => {
+  const data = await guard(() => post("/api/reset"));
+  if (!data) return;
+  state.config = data.config;
+  renderConfig();
+  setDirty(true);
+  setStatus("Valeurs par défaut chargées. Sauvegardez pour les conserver.", "ok");
+});
+
+window.addEventListener("beforeunload", closeStream);
+
+/* --- Démarrage ------------------------------------------------------------ */
+
+(async function boot() {
+  renderConnection();
+  await refreshPorts();
+  const data = await guard(() => api("/api/status"));
+  if (data && data.connected) {
+    adoptStatus(data);
+    openStream();
+    setStatus(`Connecté sur ${data.port}.`, "ok");
+  }
+  drawCurve();
+})();
+</script>
+</body>
+</html>
