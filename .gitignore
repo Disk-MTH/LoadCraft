@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.hex
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Arduino / PlatformIO
+.pio/
+.vscode/
+
+# Editors / OS
+*.swp
+.DS_Store
+
+# Claude Code plugin state
+.remember/
