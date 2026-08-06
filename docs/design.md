@@ -289,14 +289,22 @@ détecté — mieux vaut un choix encombré qu'aucun choix.
 | Tests natifs C | Courbes, normalisation, filtre, protocole, formatage, EEPROM | ✅ 3425 assertions |
 | Tests pytest | Protocole hôte, dialogue série, API serveur, ports | ✅ 113 tests |
 | Compilation AVR | Le firmware compile pour l'ATmega32u4 | ✅ 62 % flash, 26 % RAM |
-| Lecture HX711 brute | Câblage, bruit, plage, signe | ⏳ carte requise |
-| Énumération HID | Windows voit un joystick, l'axe bouge | ⏳ carte requise |
-| Calibration bout en bout | App ↔ firmware, persistance EEPROM | ⏳ carte requise |
-| Essai en jeu | Ressenti, choix final de la courbe | ⏳ carte requise |
+| Énumération HID | Le système voit un joystick à un axe | ✅ Linux, `ABS_X` seul |
+| Protocole sur matériel | PING, GET, STREAM, SET, RESET, erreurs | ✅ |
+| EEPROM vierge | Repli sur les valeurs par défaut, `calibrated=0` | ✅ |
+| Lecture HX711 brute | Câblage, bruit, plage, signe | ⏳ capteur requis |
+| Persistance EEPROM | Écriture puis relecture après débranchement | ⏳ |
+| Énumération HID Windows | `joy.cpl` voit l'axe bouger | ⏳ |
+| Essai en jeu | Ressenti, choix final de la courbe | ⏳ |
 
 Les tests avec carte simulée valident le *dialogue*, pas le matériel : ils ne
 disent rien du bruit réel du HX711, de la stabilité mécanique du montage, ni de
 la façon dont un jeu donné interprète l'axe.
+
+Constaté au premier branchement, capteur non câblé : la télémétrie renvoie
+`raw=0 out=0.000 axis=0` de façon stable. C'est le pull-up sur la ligne DT qui
+produit ce résultat — sans lui, l'entrée flottante aurait fait remonter du
+bruit présenté comme une mesure (voir §3.1).
 
 ## 10. Hors périmètre (v1)
 

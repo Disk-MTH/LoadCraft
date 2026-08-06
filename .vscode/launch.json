@@ -1,0 +1,101 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "App : lancer (fenêtre native)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "handbrake_tuner",
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "App : lancer (navigateur)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "handbrake_tuner",
+      "args": ["--browser"],
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "App : serveur seul (port 8730)",
+      "detail": "Sans interface : utile pour interroger l'API au curl.",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "handbrake_tuner",
+      "args": ["--no-window", "--port", "8730"],
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Tests app : tous",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests", "-v"],
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Tests app : fichier courant",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v"],
+      "cwd": "${workspaceFolder}/app",
+      "python": "${workspaceFolder}/app/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Tests firmware : hb_core (gdb)",
+      "detail": "Les tests natifs sont de simples exécutables : ils se déboguent normalement.",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/build/test_hb_core",
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb",
+      "preLaunchTask": "Tests : firmware (natif)",
+      "setupCommands": [
+        {
+          "description": "Affichage lisible des structures",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "Tests firmware : hb_protocol (gdb)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/build/test_hb_protocol",
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb",
+      "preLaunchTask": "Tests : firmware (natif)",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Tests firmware : hb_record (gdb)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/build/test_hb_record",
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb",
+      "preLaunchTask": "Tests : firmware (natif)",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    }
+  ]
+}

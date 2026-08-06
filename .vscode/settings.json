@@ -1,0 +1,37 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/app/.venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}/app",
+  "python.testing.pytestArgs": ["tests"],
+
+  "files.associations": {
+    "*.ino": "cpp"
+  },
+
+  "[python]": {
+    "editor.rulers": [88]
+  },
+  "[c]": {
+    "editor.rulers": [79]
+  },
+  "[cpp]": {
+    "editor.rulers": [79]
+  },
+
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.egg-info": true,
+    "**/.pytest_cache": true,
+    "tests/build": true,
+    "firmware/handbrake/build": true
+  },
+
+  "search.exclude": {
+    "app/.venv": true,
+    "tests/build": true
+  }
+}

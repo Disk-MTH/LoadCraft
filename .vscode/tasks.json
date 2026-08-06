@@ -1,0 +1,86 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Tests : tout",
+      "type": "shell",
+      "command": "make test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Tests : firmware (natif)",
+      "type": "shell",
+      "command": "make test-firmware",
+      "group": "test",
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Tests : app",
+      "type": "shell",
+      "command": "make test-app",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Firmware : compiler",
+      "type": "shell",
+      "command": "make build",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Firmware : détecter la carte",
+      "detail": "Affiche le port et le FQBN à utiliser pour le téléversement.",
+      "type": "shell",
+      "command": "make detect",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Firmware : téléverser",
+      "detail": "Compile puis envoie sur la carte. Demande le port.",
+      "type": "shell",
+      "command": "make flash PORT=${input:serialPort}",
+      "dependsOn": "Firmware : compiler",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "App : lancer",
+      "detail": "Ouvre l'app de calibration (fenêtre native ou navigateur).",
+      "type": "shell",
+      "command": "${workspaceFolder}/app/.venv/bin/python -m handbrake_tuner",
+      "options": { "cwd": "${workspaceFolder}/app" },
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "App : installer l'environnement Python",
+      "type": "shell",
+      "command": "make setup-app",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "Nettoyer",
+      "type": "shell",
+      "command": "make clean",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "serialPort",
+      "type": "promptString",
+      "description": "Port série de la carte (voir « Firmware : détecter la carte »)",
+      "default": "/dev/ttyACM0"
+    }
+  ]
+}

@@ -15,7 +15,12 @@ venv/
 
 # Arduino / PlatformIO
 .pio/
-.vscode/
+
+# VS Code : la configuration partagée est versionnée, seuls les fichiers
+# propres à chaque poste sont ignorés.
+.vscode/*.log
+.vscode/ipch/
+.vscode/*.local.json
 
 # Editors / OS
 *.swp

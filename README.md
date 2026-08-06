@@ -15,15 +15,17 @@ Cellule 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> PC
 
 | Partie | État |
 |---|---|
-| Cœur du firmware (courbes, filtre, protocole, EEPROM) | ✅ écrit, 3425 assertions natives |
-| Couche matérielle + sketch | ✅ écrit, compile pour l'ATmega32u4 |
-| App de calibration | ✅ écrite, 113 tests |
-| Essai sur matériel réel | ⏳ en attente de la carte |
+| Cœur du firmware (courbes, filtre, protocole, EEPROM) | ✅ 3425 assertions natives |
+| Couche matérielle + sketch | ✅ compile, 62 % flash / 26 % RAM |
+| App de calibration | ✅ 113 tests |
+| **Carte flashée et reconnue** | ✅ un axe `ABS_X`, sur `/dev/input/js2` |
+| **Protocole série sur matériel réel** | ✅ PING/GET/STREAM/SET/RESET vérifiés |
+| Lecture de la cellule | ⏳ HX711 pas encore câblé |
+| Essai en jeu | ⏳ |
 
-Rien n'a encore tourné sur une vraie carte : tout ce qui touche au HX711, à
-l'énumération HID et à l'EEPROM reste à valider avec le montage en main. Voir
-`docs/design.md` §9 pour le détail de ce qui est vérifié et de ce qui ne l'est
-pas.
+La carte fonctionne et dialogue. Ce qui reste à valider tient au capteur
+lui-même : bruit réel du HX711, plage utile, tenue mécanique, et le ressenti
+en jeu qui décidera de la courbe. Détail dans `docs/design.md` §9.
 
 ## Matériel
 
@@ -227,6 +229,27 @@ STREAM 0|1               télémétrie : T raw=… out=… axis=…
 ```
 
 La télémétrie est coupée par défaut. Détails dans `docs/design.md` §6.
+
+## VS Code
+
+La configuration partagée est versionnée dans `.vscode/`.
+
+**Tâches** (`Ctrl+Shift+P` → *Run Task*) : lancer les tests (tout / firmware /
+app), compiler, détecter la carte, téléverser (demande le port), lancer l'app,
+installer l'environnement Python. `Ctrl+Shift+B` compile le firmware,
+`Ctrl+Shift+P` → *Run Test Task* lance toute la suite.
+
+**Débogage** (F5) : l'app en fenêtre native, en navigateur ou en serveur seul,
+les tests pytest (tous ou le fichier courant), et les trois exécutables de
+tests natifs sous gdb — le cœur du firmware étant du C99 ordinaire, il se
+débogue comme n'importe quel programme, avec points d'arrêt et inspection.
+
+**IntelliSense** : deux configurations C/C++ dans `c_cpp_properties.json`. La
+première, *Cœur firmware (natif)*, sert pour `hb_core`/`hb_protocol`/
+`hb_record` et les tests. La seconde, *Firmware AVR*, ajoute les en-têtes
+Arduino pour le `.ino` et les drivers. Basculer via la barre d'état en bas à
+droite. Les chemins suivent l'installation par défaut d'arduino-cli ; si vous
+mettez le core AVR à jour, ajustez le numéro de version.
 
 ## Documentation
 
