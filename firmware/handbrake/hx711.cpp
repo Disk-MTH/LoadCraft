@@ -7,7 +7,15 @@ HX711::HX711(uint8_t pin_data, uint8_t pin_clock, uint8_t gain_pulses)
 
 void HX711::begin()
 {
-    pinMode(_pin_data, INPUT);
+    /* Pull-up sur la ligne de données : capteur absent ou mal câblé, la
+     * broche est lue au niveau haut, donc « pas de conversion prête », et
+     * l'absence est signalée franchement. Sans lui, l'entrée flotte et peut
+     * se lire au niveau bas au hasard : le firmware lirait alors 24 bits de
+     * bruit et les présenterait comme une mesure.
+     *
+     * La sortie DOUT du HX711 est de type push-pull : elle impose son niveau
+     * sans difficulté face au pull-up interne de l'AVR (20 à 50 kΩ). */
+    pinMode(_pin_data, INPUT_PULLUP);
     pinMode(_pin_clock, OUTPUT);
 
     /* Horloge basse : une impulsion maintenue haut plus de 60 µs met le HX711
