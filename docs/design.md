@@ -117,7 +117,16 @@ d'un pied ou d'une main, et restent en deçà du bruit résiduel du HX711 : mont
 en résolution n'apporterait que du bruit supplémentaire.
 
 `begin(false)` + `sendState()` explicite : l'état est envoyé en un rapport
-atomique, jamais partiellement mis à jour.
+atomique, jamais partiellement mis à jour. Le rapport n'est émis qu'au
+changement de valeur, avec un renvoi périodique pour garder l'hôte en phase
+même levier immobile.
+
+La pile HID est celle de **MHeironimus/ArduinoJoystickLibrary**, qui permet de
+déclarer exactement les axes voulus et de fixer leur plage. Elle **n'est pas
+dans le gestionnaire de bibliothèques Arduino** : une autre bibliothèque nommée
+« Joystick » y figure, destinée à *lire* un module joystick analogique.
+L'installer produit une erreur `'Joystick_' does not name a type`. Voir le
+README pour l'installation depuis GitHub.
 
 ## 4. Zéro et dérive
 
@@ -134,16 +143,33 @@ pénible que la dérive qu'il corrige.
 
 ## 5. Persistance
 
-EEPROM interne du 32u4 (1 Ko), adresse 0, structure versionnée :
+EEPROM interne du 32u4 (1 Ko), adresse 0, enregistrement de 22 octets :
 
-```c
-magic (u32) | version (u16) | raw_min (i32) | raw_max (i32)
-            | curve (u8) | gamma (float) | calibrated (u8) | crc (u16)
-```
+| Offset | Champ | Type |
+|---|---|---|
+| 0–3 | magic `"HBK1"` | u32 |
+| 4 | version | u8 |
+| 5 | curve | u8 |
+| 6–9 | raw_min | i32 |
+| 10–13 | raw_max | i32 |
+| 14–17 | gamma | float |
+| 18 | calibrated | u8 |
+| 19 | réservé | u8 |
+| 20–21 | CRC-16/CCITT | u16 |
+
+Disposition petit-boutiste écrite octet par octet, et non une `struct`
+sérialisée telle quelle : pas de dépendance au bourrage ni à l'alignement
+choisis par le compilateur, donc le même enregistrement est relu à l'identique
+par la cible AVR et par les tests natifs.
 
 Magic + version + CRC16 : une EEPROM vierge, corrompue, ou écrite par une
 version antérieure incompatible est détectée et remplacée par les valeurs par
 défaut, plutôt que d'être interprétée comme une calibration valide.
+
+Un CRC correct ne prouve cependant que l'intégrité. Un enregistrement
+authentique peut contenir des valeurs inexploitables — un `gamma` NaN
+contaminerait tout le calcul de l'axe. `hb_config_sanitize` est donc appliqué
+systématiquement après relecture.
 
 Écriture **uniquement sur commande `SAVE` explicite**. Les réglages en direct
 (slider gamma) restent en RAM : l'EEPROM AVR est donnée pour ~100 000 cycles
@@ -204,16 +230,22 @@ logique soit testable sur PC sans carte :
 firmware/handbrake/
   hb_core.h/.c       C99 pur : config, normalisation, courbes, filtre EMA
   hb_protocol.h/.c   C99 pur : analyse des commandes, formatage, tampon de ligne
+  hb_record.h/.c     C99 pur : sérialisation de l'enregistrement EEPROM + CRC16
   hx711.h/.cpp       driver matériel non bloquant
-  hb_storage.h/.cpp  EEPROM + CRC16
+  hb_storage.h/.cpp  lecture/écriture EEPROM
   config.h           brochage et constantes
   handbrake.ino      assemblage : boucle, HID, série
 ```
 
-`hb_core` et `hb_protocol` ne dépendent que de la libc et de `math.h` : ils sont
-compilés tels quels par les tests natifs (`tests/`, gcc) et par le compilateur
-AVR. Toute la logique susceptible d'être fausse est ainsi couverte par des tests
-qui tournent en une seconde, sans matériel.
+`hb_core`, `hb_protocol` et `hb_record` ne dépendent que de la libc et de
+`math.h` : ils sont compilés tels quels par les tests natifs (`tests/`, gcc) et
+par le compilateur AVR. Toute la logique susceptible d'être fausse est ainsi
+couverte par des tests qui tournent en une seconde, sans matériel.
+
+La sérialisation est séparée de l'accès EEPROM précisément pour cette raison :
+la détection de corruption casse sans bruit et ne se remarque qu'une fois la
+calibration perdue. `hb_storage` se réduit alors à une boucle de lecture et une
+boucle d'écriture.
 
 `hb_storage`, `hx711` et le `.ino` sont volontairement minces : ce qu'ils
 contiennent ne peut être validé qu'avec la carte en main.
@@ -235,17 +267,36 @@ SSE plutôt que WebSocket : flux unidirectionnel serveur→page uniquement, donc
 SSE suffit et tient dans la bibliothèque standard côté navigateur, sans
 dépendance supplémentaire côté serveur.
 
+Le transport série est **injecté** dans `SerialLink` plutôt que créé par lui :
+les tests fournissent une carte simulée et couvrent tout le dialogue — ordre
+des réponses, effet des commandes, résistance aux octets parasites — sans
+matériel ni pyserial.
+
+Les courbes sont réimplémentées côté hôte plutôt que demandées à la carte, pour
+que l'aperçu tracé montre exactement ce que le firmware calcule. Les tests
+Python reprennent les propriétés vérifiées côté C (points fixes, monotonie,
+symétrie, neutralité de `gamma = 1`).
+
+L'énumération des ports ne retient que les périphériques USB : sous Linux,
+pyserial remonte aussi la trentaine de ports 8250 hérités (`/dev/ttyS*`), où la
+carte serait introuvable. Repli sur la liste complète si aucun port USB n'est
+détecté — mieux vaut un choix encombré qu'aucun choix.
+
 ## 9. Plan de validation
 
-| Étape | Vérifie | Sans matériel |
+| Étape | Vérifie | État |
 |---|---|---|
-| Tests natifs C | Courbes, normalisation, filtre, protocole, formatage | ✅ |
-| Tests pytest | Protocole côté app, API serveur | ✅ |
-| Compilation AVR | Le firmware compile pour l'ATmega32u4 | ✅ |
-| Lecture HX711 brute | Câblage, bruit, plage, signe | ❌ carte requise |
-| Énumération HID | Windows voit un joystick, l'axe bouge | ❌ carte requise |
-| Calibration bout en bout | App ↔ firmware, persistance EEPROM | ❌ carte requise |
-| Essai en jeu | Ressenti, choix final de la courbe | ❌ carte requise |
+| Tests natifs C | Courbes, normalisation, filtre, protocole, formatage, EEPROM | ✅ 3425 assertions |
+| Tests pytest | Protocole hôte, dialogue série, API serveur, ports | ✅ 113 tests |
+| Compilation AVR | Le firmware compile pour l'ATmega32u4 | ✅ 62 % flash, 26 % RAM |
+| Lecture HX711 brute | Câblage, bruit, plage, signe | ⏳ carte requise |
+| Énumération HID | Windows voit un joystick, l'axe bouge | ⏳ carte requise |
+| Calibration bout en bout | App ↔ firmware, persistance EEPROM | ⏳ carte requise |
+| Essai en jeu | Ressenti, choix final de la courbe | ⏳ carte requise |
+
+Les tests avec carte simulée valident le *dialogue*, pas le matériel : ils ne
+disent rien du bruit réel du HX711, de la stabilité mécanique du montage, ni de
+la façon dont un jeu donné interprète l'axe.
 
 ## 10. Hors périmètre (v1)
 
