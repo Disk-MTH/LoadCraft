@@ -93,14 +93,82 @@ ARDUINO_LIBRARY_ENABLE_UNSAFE_INSTALL=true \
 ### Compilation
 
 ```bash
-make build                       # arduino:avr:micro par défaut
+make detect                      # identifie la carte et son FQBN
+make build                       # arduino:avr:leonardo par défaut
 make flash PORT=/dev/ttyACM0     # téléversement
 ```
 
 Occupation constatée : 17896 octets de flash (62 %), 687 octets de RAM (26 %).
 
-Sous l'IDE Arduino, choisir la carte **Arduino Micro** (même ATmega32u4 que le
-Pro Micro) et ouvrir `firmware/handbrake/handbrake.ino`.
+**Le FQBN dépend du bootloader du clone.** Beaucoup de Pro Micro embarquent le
+bootloader Leonardo et s'annoncent `2341:8036`. D'autres se présentent en
+Arduino Micro (`2341:8037`) ou en SparkFun Pro Micro (`1B4F:…`). `make detect`
+donne le bon ; pour en utiliser un autre :
+
+```bash
+make build FQBN=arduino:avr:micro
+```
+
+Sous l'IDE Arduino, choisir la carte correspondante (**Arduino Leonardo** ou
+**Arduino Micro** — même ATmega32u4) et ouvrir
+`firmware/handbrake/handbrake.ino`.
+
+### Si le téléversement échoue
+
+Le 32u4 doit passer en bootloader pour être flashé. Normalement l'outil s'en
+charge en ouvrant le port à 1200 bauds, mais un sketch qui plante la pile USB
+empêche ce mécanisme. Solution manuelle : **double appui rapide sur RESET**,
+puis lancer le téléversement dans les ~8 secondes où le bootloader est actif.
+
+## Prérequis par système
+
+### Linux
+
+L'accès au port série passe par le groupe `dialout` :
+
+```bash
+sudo usermod -aG dialout $USER   # puis déconnexion/reconnexion de session
+```
+
+Sans ça, `/dev/ttyACM0` reste en `root:dialout` et l'app comme le
+téléversement échouent sur un refus de permission.
+
+### Windows
+
+Rien à installer : Windows 10/11 fournit le pilote CDC pour l'ATmega32u4 à
+identifiants Arduino, et le périphérique HID est reconnu nativement.
+
+Le port est un `COM…` au lieu de `/dev/ttyACM0` — l'app le détecte de la même
+façon. Le `Makefile` suppose un environnement Unix ; sous Windows, lancer les
+commandes directement :
+
+```
+cd app
+uv venv .venv
+uv pip install --python .venv -e ".[dev]"
+.venv\Scripts\python -m pytest tests -q
+.venv\Scripts\python -m handbrake_tuner
+```
+
+Le firmware est strictement identique sur les deux systèmes : la calibration
+sauvegardée sous Linux reste valable une fois la carte branchée sur le PC de
+jeu, puisqu'elle vit dans l'EEPROM de la carte et non sur le PC.
+
+## Vérifier que l'axe est bien vu par le système
+
+### Linux
+
+```bash
+sudo dnf install evtest joystick   # Fedora
+jstest /dev/input/js0              # l'axe doit bouger quand on tire
+```
+
+### Windows
+
+`Win+R` → `joy.cpl` → sélectionner le périphérique → **Propriétés**. L'axe X
+doit se déplacer quand on tire sur le levier.
+
+Une fois visible ici, n'importe quel jeu peut le mapper comme handbrake.
 
 ## App de calibration
 
