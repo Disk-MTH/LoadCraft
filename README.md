@@ -182,11 +182,25 @@ app/.venv/bin/python -m handbrake_tuner
 Options : `--browser` (ouvrir dans le navigateur), `--no-window` (serveur
 seul), `--port N` (port HTTP fixe). Le serveur n'écoute que sur `127.0.0.1`.
 
-Pour une fenêtre native plutôt que le navigateur :
+`make setup-app` installe `pywebview`, qui affiche l'interface dans une
+fenêtre native. S'il est absent, l'app bascule sur le navigateur par défaut
+au lieu de refuser de démarrer — pratique en dépannage, mais c'est aussi ce
+qui se produit si l'installation de la fenêtre native a échoué sans qu'on
+l'ait remarqué.
+
+Sous **Linux**, cette fenêtre s'appuie sur WebKitGTK via PyGObject. PyGObject
+ne s'installe pas proprement par pip sans chaîne de compilation complète,
+alors que la bibliothèque système est presque toujours déjà présente : c'est
+pourquoi l'environnement virtuel est créé avec `--system-site-packages`. Si la
+fenêtre native ne s'ouvre pas malgré tout :
 
 ```bash
-cd app && .venv/bin/python -m pip install pywebview
+sudo dnf install python3-gobject webkit2gtk4.1   # Fedora
+python3 -c "import gi; gi.require_version('Gtk','3.0')"  # doit passer
 ```
+
+Sous **Windows**, rien à faire : pywebview y utilise WebView2, fourni avec
+Edge.
 
 ### Procédure de calibration
 

@@ -35,9 +35,14 @@ test-app: $(VENV)
 
 setup-app: $(VENV)
 
+# --system-site-packages : le backend GTK de pywebview a besoin de PyGObject,
+# que pip ne fournit pas sans chaîne de compilation complète. Sous Linux, la
+# bibliothèque système est déjà là et se prête au partage ; sous Windows le
+# drapeau est sans effet, pywebview y passant par WebView2.
 $(VENV):
 	@echo "Création de l'environnement Python…"
-	@cd app && uv venv .venv && uv pip install --python .venv -e ".[dev]"
+	@cd app && uv venv --system-site-packages .venv \
+		&& uv pip install --python .venv -e ".[dev,desktop]"
 
 build:
 	arduino-cli compile --fqbn $(FQBN) $(SKETCH)

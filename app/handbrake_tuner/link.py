@@ -6,7 +6,9 @@ transport et couvrent toute la logique de dialogue sans matériel ni pyserial.
 
 from __future__ import annotations
 
+import errno
 import queue
+import sys
 import threading
 from typing import List, Optional
 
@@ -239,6 +241,42 @@ def list_ports() -> List[dict]:
     return sorted(usb_ports or ports, key=lambda p: p["device"])
 
 
+def _open_failure_hint(port: str, exc: Exception) -> str:
+    """Message d'ouverture actionnable.
+
+    Les erreurs d'ouverture de port ont chacune une cause dominante et une
+    correction connue. Les renvoyer brutes (« [Errno 13] Permission denied »)
+    laisse chercher ce que le programme sait déjà.
+    """
+    code = getattr(exc, "errno", None)
+
+    if code == errno.EACCES:
+        if sys.platform.startswith("linux"):
+            return (
+                f"accès refusé à {port}. Sous Linux, l'accès aux ports série "
+                "passe par le groupe « dialout » : "
+                "sudo usermod -aG dialout $USER, puis déconnexion et "
+                "reconnexion de session. Une application déjà ouverte avant "
+                "cette manipulation garde les anciens droits et doit être "
+                "entièrement relancée."
+            )
+        return f"accès refusé à {port}. Vérifiez les droits sur le port."
+
+    if code == errno.EBUSY:
+        return (
+            f"{port} est déjà ouvert par un autre programme "
+            "(moniteur série, autre instance de l'app…)."
+        )
+
+    if code == errno.ENOENT:
+        return (
+            f"{port} n'existe pas. La carte a-t-elle été débranchée, ou le "
+            "port a-t-il changé de nom ?"
+        )
+
+    return f"ouverture de {port} impossible : {exc}"
+
+
 def open_serial(port: str, timeout: float = 0.2):
     """Ouvre un port série réel."""
     try:
@@ -251,7 +289,7 @@ def open_serial(port: str, timeout: float = 0.2):
     try:
         return serial.Serial(port=port, baudrate=BAUDRATE, timeout=timeout)
     except Exception as exc:
-        raise LinkError(f"ouverture de {port} impossible : {exc}") from exc
+        raise LinkError(_open_failure_hint(port, exc)) from exc
 
 
 def connect(port: str) -> SerialLink:
