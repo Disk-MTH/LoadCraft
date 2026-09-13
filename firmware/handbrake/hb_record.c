@@ -11,8 +11,9 @@
  *   10..13 raw_max      i32
  *   14..17 gamma        float (IEEE-754 bits)
  *   18     calibrated   u8
- *   19     reserved     u8, zero
- *   20..21 crc16        u16, over bytes 0..19
+ *   19..22 alpha        float (IEEE-754 bits)
+ *   23     reserved     u8, zero
+ *   24..25 crc16        u16, over bytes 0..23
  */
 #define OFF_MAGIC      0
 #define OFF_VERSION    4
@@ -21,8 +22,9 @@
 #define OFF_RAW_MAX    10
 #define OFF_GAMMA      14
 #define OFF_CALIBRATED 18
-#define OFF_RESERVED   19
-#define OFF_CRC        20
+#define OFF_ALPHA      19
+#define OFF_RESERVED   23
+#define OFF_CRC        24
 
 static void put_u32(uint8_t *buf, uint32_t v)
 {
@@ -92,6 +94,7 @@ void hb_record_pack(uint8_t *buf, const hb_config_t *cfg)
     put_u32(buf + OFF_RAW_MAX, (uint32_t)cfg->raw_max);
     put_f32(buf + OFF_GAMMA, cfg->gamma);
     buf[OFF_CALIBRATED] = cfg->calibrated;
+    put_f32(buf + OFF_ALPHA, cfg->alpha);
     buf[OFF_RESERVED]   = 0;
     put_u16(buf + OFF_CRC, hb_crc16(buf, OFF_CRC));
 }
@@ -115,6 +118,7 @@ int hb_record_unpack(const uint8_t *buf, hb_config_t *cfg)
     parsed.raw_max    = (int32_t)get_u32(buf + OFF_RAW_MAX);
     parsed.gamma      = get_f32(buf + OFF_GAMMA);
     parsed.calibrated = buf[OFF_CALIBRATED];
+    parsed.alpha      = get_f32(buf + OFF_ALPHA);
 
     /* A correct CRC only guarantees integrity, not validity: a record
      * written by a version with a wider domain would stay intact while

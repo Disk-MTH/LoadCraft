@@ -18,6 +18,9 @@ from typing import Optional, Union
 AXIS_MAX = 1023
 GAMMA_MIN = 0.10
 GAMMA_MAX = 5.00
+ALPHA_MIN = 0.10
+ALPHA_MAX = 1.00
+ALPHA_DEFAULT = 0.50
 CURVES = ("LINEAR", "POWER", "SCURVE")
 
 
@@ -29,6 +32,7 @@ class Config:
     raw_max: int
     curve: str
     gamma: float
+    alpha: float
     calibrated: bool
 
     def as_dict(self) -> dict:
@@ -37,6 +41,7 @@ class Config:
             "raw_max": self.raw_max,
             "curve": self.curve,
             "gamma": self.gamma,
+            "alpha": self.alpha,
             "calibrated": self.calibrated,
         }
 
@@ -109,6 +114,7 @@ def parse_line(line: str) -> Optional[Message]:
                 raw_max=int(fields["max"]),
                 curve=curve,
                 gamma=float(fields["gamma"]),
+                alpha=float(fields["alpha"]),
                 calibrated=fields["calibrated"] == "1",
             )
         except (KeyError, ValueError):
@@ -176,15 +182,19 @@ def cmd_set_curve(curve: str, gamma: Optional[float] = None) -> str:
         raise ValueError(f"unknown curve: {curve}")
     if gamma is None:
         return f"SET CURVE {curve}"
-    return f"SET CURVE {curve} {_fmt_gamma(gamma)}"
+    return f"SET CURVE {curve} {_fmt_float(gamma)}"
 
 
 def cmd_set_gamma(gamma: float) -> str:
-    return f"SET GAMMA {_fmt_gamma(gamma)}"
+    return f"SET GAMMA {_fmt_float(gamma)}"
 
 
-def _fmt_gamma(gamma: float) -> str:
-    return f"{float(gamma):.3f}"
+def cmd_set_alpha(alpha: float) -> str:
+    return f"SET ALPHA {_fmt_float(alpha)}"
+
+
+def _fmt_float(value: float) -> str:
+    return f"{float(value):.3f}"
 
 
 # --- Curves ------------------------------------------------------------------
@@ -199,6 +209,17 @@ def clamp_gamma(gamma: float) -> float:
     if gamma != gamma:  # NaN
         return 1.0
     return max(GAMMA_MIN, min(GAMMA_MAX, gamma))
+
+
+def clamp_alpha(alpha: float) -> float:
+    """Applies the same bounds as ``hb_config_sanitize``."""
+    try:
+        alpha = float(alpha)
+    except (TypeError, ValueError):
+        return ALPHA_DEFAULT
+    if alpha != alpha:  # NaN
+        return ALPHA_DEFAULT
+    return max(ALPHA_MIN, min(ALPHA_MAX, alpha))
 
 
 def apply_curve(curve: str, gamma: float, t: float) -> float:

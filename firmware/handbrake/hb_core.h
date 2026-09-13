@@ -22,6 +22,17 @@ extern "C" {
 #define HB_GAMMA_MIN 0.10f
 #define HB_GAMMA_MAX 5.00f
 
+/* Bounds of the filter coefficient (hb_config_t.alpha), enforced by
+ * hb_config_sanitize: 1.0 is the unfiltered reading, below the floor the
+ * filter would effectively freeze the axis. */
+#define HB_ALPHA_MIN 0.10f
+#define HB_ALPHA_MAX 1.00f
+
+/* Default filter coefficient (blank EEPROM, RESET): the fraction of a new
+ * reading adopted each sample. 1.0 is unfiltered (most reactive, noisiest);
+ * values toward 0 smooth more but add lag. Adjustable at run time. */
+#define HB_DEFAULT_ALPHA 0.5f
+
 /* Default range, blank EEPROM: deliberately very wide so the axis barely
  * moves, which makes the absence of calibration obvious. */
 #define HB_DEFAULT_RAW_MIN 0L
@@ -38,6 +49,7 @@ typedef struct {
     int32_t raw_max;    /* raw reading, desired maximum force */
     uint8_t curve;      /* hb_curve_t */
     float   gamma;      /* curve parameter, ignored if LINEAR */
+    float   alpha;      /* EMA filter coefficient, [HB_ALPHA_MIN, HB_ALPHA_MAX] */
     uint8_t calibrated; /* 0 until the user has calibrated */
 } hb_config_t;
 

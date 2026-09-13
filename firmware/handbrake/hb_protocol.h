@@ -38,14 +38,15 @@ typedef enum {
     HB_CMD_SET_MIN,
     HB_CMD_SET_MAX,
     HB_CMD_SET_CURVE,
-    HB_CMD_SET_GAMMA
+    HB_CMD_SET_GAMMA,
+    HB_CMD_SET_ALPHA
 } hb_cmd_kind_t;
 
 typedef struct {
     uint8_t kind;      /* hb_cmd_kind_t */
     uint8_t has_value; /* SET MIN/MAX: 1 if an explicit value is provided */
     int32_t ivalue;    /* SET MIN/MAX <v>, STREAM <0|1> */
-    float   fvalue;    /* SET GAMMA <f>, SET CURVE POWER <f> */
+    float   fvalue;    /* SET GAMMA <f>, SET ALPHA <f>, SET CURVE POWER <f> */
     uint8_t curve;     /* SET CURVE : hb_curve_t */
     uint8_t has_gamma; /* SET CURVE: 1 if a gamma accompanies the curve */
 } hb_cmd_t;
@@ -67,7 +68,7 @@ int hb_curve_from_name(const char *name, uint8_t *out);
  * buffer is too small - in which case buf receives an empty string. */
 size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals);
 
-/* "CFG min=... max=... curve=... gamma=... calibrated=..." */
+/* "CFG min=... max=... curve=... gamma=... alpha=... calibrated=..." */
 size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg);
 
 /* "T raw=... out=... axis=... s=..." - s=1 with a valid sample, s=0 otherwise. */

@@ -163,6 +163,16 @@ static int parse_set(const char *p, hb_cmd_t *out)
         return 1;
     }
 
+    if (tok_eq(p, n, "ALPHA")) {
+        rest = skip_ws(p + n);
+        if (!parse_f32(rest, &out->fvalue, &end) || !at_end(end)) {
+            out->kind = (uint8_t)HB_CMD_UNKNOWN;
+            return 1;
+        }
+        out->kind = (uint8_t)HB_CMD_SET_ALPHA;
+        return 1;
+    }
+
     out->kind = (uint8_t)HB_CMD_UNKNOWN;
     return 1;
 }
@@ -309,6 +319,7 @@ size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals)
 size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg)
 {
     char gbuf[16];
+    char abuf[16];
     int  n;
 
     if (buf == NULL || size == 0) {
@@ -316,10 +327,11 @@ size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg)
     }
 
     hb_fmt_fixed(gbuf, sizeof gbuf, cfg->gamma, 3);
+    hb_fmt_fixed(abuf, sizeof abuf, cfg->alpha, 3);
     n = snprintf(buf, size,
-                 "CFG min=%ld max=%ld curve=%s gamma=%s calibrated=%u",
+                 "CFG min=%ld max=%ld curve=%s gamma=%s alpha=%s calibrated=%u",
                  (long)cfg->raw_min, (long)cfg->raw_max,
-                 hb_curve_name(cfg->curve), gbuf,
+                 hb_curve_name(cfg->curve), gbuf, abuf,
                  (unsigned)cfg->calibrated);
 
     if (n < 0 || (size_t)n >= size) {

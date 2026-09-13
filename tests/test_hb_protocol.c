@@ -168,6 +168,26 @@ static void test_set_gamma_invalid(void)
     CHECK_EQ_INT(parse("SET GAMMA 1.5 2").kind, HB_CMD_UNKNOWN);
 }
 
+/* --- SET ALPHA ----------------------------------------------------------- */
+
+static void test_set_alpha(void)
+{
+    hb_cmd_t cmd = parse("SET ALPHA 0.75");
+
+    CHECK_EQ_INT(cmd.kind, HB_CMD_SET_ALPHA);
+    CHECK_NEAR(cmd.fvalue, 0.75f, 1e-5);
+
+    CHECK_NEAR(parse("SET ALPHA 1").fvalue, 1.0f, 1e-5);
+    CHECK_NEAR(parse("SET ALPHA 0.1").fvalue, 0.1f, 1e-5);
+}
+
+static void test_set_alpha_invalid(void)
+{
+    CHECK_EQ_INT(parse("SET ALPHA").kind, HB_CMD_UNKNOWN);
+    CHECK_EQ_INT(parse("SET ALPHA abc").kind, HB_CMD_UNKNOWN);
+    CHECK_EQ_INT(parse("SET ALPHA 0.5 2").kind, HB_CMD_UNKNOWN);
+}
+
 /* --- Curve names --------------------------------------------------------- */
 
 static void test_curve_names(void)
@@ -289,11 +309,13 @@ static void test_format_config(void)
     cfg.raw_max    = 987654;
     cfg.curve      = HB_CURVE_POWER;
     cfg.gamma      = 1.8f;
+    cfg.alpha      = 0.75f;
     cfg.calibrated = 1;
 
     hb_format_config(buf, sizeof buf, &cfg);
     CHECK_STR(buf,
-              "CFG min=12345 max=987654 curve=POWER gamma=1.800 calibrated=1");
+              "CFG min=12345 max=987654 curve=POWER gamma=1.800 "
+              "alpha=0.750 calibrated=1");
 }
 
 /* HB_REPLY_MAX must cover the worst case, otherwise the reply would be
@@ -307,6 +329,7 @@ static void test_format_config_worst_case(void)
     cfg.raw_max    = -8388608L;
     cfg.curve      = HB_CURVE_SCURVE;
     cfg.gamma      = HB_GAMMA_MAX;
+    cfg.alpha      = HB_ALPHA_MAX;
     cfg.calibrated = 1;
 
     CHECK(hb_format_config(buf, sizeof buf, &cfg) > 0);
@@ -440,6 +463,9 @@ int main(void)
 
     RUN(test_set_gamma);
     RUN(test_set_gamma_invalid);
+
+    RUN(test_set_alpha);
+    RUN(test_set_alpha_invalid);
 
     RUN(test_curve_names);
     RUN(test_curve_names_round_trip);

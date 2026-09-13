@@ -21,6 +21,7 @@ class FakeBoard:
         self.raw_max = 900000
         self.curve = "LINEAR"
         self.gamma = 1.0
+        self.alpha = 0.5
         self.calibrated = calibrated
         self.current_raw = 500000
         self.streaming = False
@@ -68,7 +69,8 @@ class FakeBoard:
     def emit_config(self) -> None:
         self.emit(
             f"CFG min={self.raw_min} max={self.raw_max} curve={self.curve} "
-            f"gamma={self.gamma:.3f} calibrated={1 if self.calibrated else 0}"
+            f"gamma={self.gamma:.3f} alpha={self.alpha:.3f} "
+            f"calibrated={1 if self.calibrated else 0}"
         )
 
     def emit_telemetry(self, raw: int | None = None) -> None:
@@ -91,15 +93,22 @@ class FakeBoard:
             self.streaming = parts[1] == "1"
             self.emit(f"OK STREAM {parts[1]}")
         elif head == "SAVE":
-            self.saved = (self.raw_min, self.raw_max, self.curve, self.gamma)
+            self.saved = (
+                self.raw_min, self.raw_max, self.curve, self.gamma, self.alpha
+            )
             self.emit("OK SAVE")
         elif head == "LOAD":
             if self.saved:
-                self.raw_min, self.raw_max, self.curve, self.gamma = self.saved
+                (
+                    self.raw_min, self.raw_max, self.curve,
+                    self.gamma, self.alpha,
+                ) = self.saved
             self.emit_config()
         elif head == "RESET":
             self.raw_min, self.raw_max = 0, 8000000
-            self.curve, self.gamma, self.calibrated = "LINEAR", 1.0, False
+            self.curve, self.gamma, self.alpha, self.calibrated = (
+                "LINEAR", 1.0, 0.5, False,
+            )
             self.emit_config()
         elif head == "SET":
             self._handle_set(parts)
@@ -124,6 +133,9 @@ class FakeBoard:
             self.emit_config()
         elif target == "GAMMA":
             self.gamma = float(parts[2])
+            self.emit_config()
+        elif target == "ALPHA":
+            self.alpha = float(parts[2])
             self.emit_config()
         else:
             self.emit("ERR unknown command")

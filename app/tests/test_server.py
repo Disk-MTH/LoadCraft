@@ -115,6 +115,7 @@ def test_manual_connection_endpoints_removed(wired, path):
         ("post", "/api/calibrate/max", {"value": 42}),
         ("post", "/api/curve", {"curve": "POWER"}),
         ("post", "/api/gamma", {"gamma": 2.0}),
+        ("post", "/api/alpha", {"alpha": 0.7}),
         ("post", "/api/save", {}),
         ("post", "/api/load", {}),
         ("post", "/api/reset", {}),
@@ -206,6 +207,27 @@ def test_gamma_invalid(connected):
     client, *_ = connected
     assert client.post("/api/gamma", json={"gamma": "much"}).status_code == 400
     assert client.post("/api/gamma", json={}).status_code == 400
+
+
+def test_alpha(connected):
+    client, _, holder, _ = connected
+    body = client.post("/api/alpha", json={"alpha": 0.75}).json
+    assert body["config"]["alpha"] == pytest.approx(0.75)
+    assert "SET ALPHA 0.750" in holder["board"].received
+
+
+def test_alpha_clamped_before_sending(connected):
+    """Same rationale as gamma: clamp before sending, otherwise the app would
+    display a value the board would not actually apply."""
+    client, *_ = connected
+    body = client.post("/api/alpha", json={"alpha": 999}).json
+    assert body["config"]["alpha"] == pytest.approx(1.0)
+
+
+def test_alpha_invalid(connected):
+    client, *_ = connected
+    assert client.post("/api/alpha", json={"alpha": "much"}).status_code == 400
+    assert client.post("/api/alpha", json={}).status_code == 400
 
 
 # --- Persistence --------------------------------------------------------------

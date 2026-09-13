@@ -17,26 +17,31 @@ from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
 
 def test_parse_config():
     message = protocol.parse_line(
-        "CFG min=12345 max=987654 curve=POWER gamma=1.800 calibrated=1"
+        "CFG min=12345 max=987654 curve=POWER gamma=1.800 alpha=0.750 "
+        "calibrated=1"
     )
     assert message == Config(
-        raw_min=12345, raw_max=987654, curve="POWER", gamma=1.8, calibrated=True
+        raw_min=12345, raw_max=987654, curve="POWER", gamma=1.8,
+        alpha=0.75, calibrated=True,
     )
 
 
 def test_parse_config_not_calibrated():
     message = protocol.parse_line(
-        "CFG min=0 max=8000000 curve=LINEAR gamma=1.000 calibrated=0"
+        "CFG min=0 max=8000000 curve=LINEAR gamma=1.000 alpha=0.500 "
+        "calibrated=0"
     )
     assert message.calibrated is False
 
 
 def test_parse_config_negative_values():
     message = protocol.parse_line(
-        "CFG min=-8388608 max=-1 curve=SCURVE gamma=5.000 calibrated=1"
+        "CFG min=-8388608 max=-1 curve=SCURVE gamma=5.000 alpha=1.000 "
+        "calibrated=1"
     )
     assert message.raw_min == -8388608
     assert message.raw_max == -1
+    assert message.alpha == 1.0
 
 
 def test_parse_telemetry():
@@ -58,9 +63,10 @@ def test_parse_ok_and_err():
         "   ",
         "noise",
         "CFG",
-        "CFG min=abc max=1 curve=LINEAR gamma=1.0 calibrated=0",
-        "CFG min=1 curve=LINEAR gamma=1.0 calibrated=0",  # missing max
-        "CFG min=1 max=2 curve=PARABOLE gamma=1.0 calibrated=0",
+        "CFG min=abc max=1 curve=LINEAR gamma=1.0 alpha=0.5 calibrated=0",
+        "CFG min=1 curve=LINEAR gamma=1.0 alpha=0.5 calibrated=0",  # missing max
+        "CFG min=1 max=2 curve=PARABOLE gamma=1.0 alpha=0.5 calibrated=0",
+        "CFG min=1 max=2 curve=LINEAR gamma=1.0 calibrated=0",  # missing alpha
         "T raw=1 out=x axis=2",
         "T raw=1",
     ],
@@ -96,6 +102,8 @@ def test_curve_commands():
     assert protocol.cmd_set_curve("power") == "SET CURVE POWER"
     assert protocol.cmd_set_curve("SCURVE", 1.8) == "SET CURVE SCURVE 1.800"
     assert protocol.cmd_set_gamma(2.5) == "SET GAMMA 2.500"
+    assert protocol.cmd_set_alpha(0.75) == "SET ALPHA 0.750"
+    assert protocol.cmd_set_alpha(1.0) == "SET ALPHA 1.000"
 
 
 def test_unknown_curve_rejected():
@@ -119,6 +127,7 @@ def test_commands_readable_by_the_firmware():
         protocol.cmd_set_curve("LINEAR"),
         protocol.cmd_set_curve("POWER", 1.5),
         protocol.cmd_set_gamma(0.5),
+        protocol.cmd_set_alpha(0.5),
     ]
     for command in commands:
         assert "\n" not in command
@@ -136,6 +145,15 @@ def test_clamp_gamma():
     assert protocol.clamp_gamma(-5.0) == protocol.GAMMA_MIN
     assert protocol.clamp_gamma(float("nan")) == 1.0
     assert protocol.clamp_gamma("noise") == 1.0
+
+
+def test_clamp_alpha():
+    assert protocol.clamp_alpha(0.5) == 0.5
+    assert protocol.clamp_alpha(2.0) == protocol.ALPHA_MAX
+    assert protocol.clamp_alpha(0.0) == protocol.ALPHA_MIN
+    assert protocol.clamp_alpha(-5.0) == protocol.ALPHA_MIN
+    assert protocol.clamp_alpha(float("nan")) == protocol.ALPHA_DEFAULT
+    assert protocol.clamp_alpha("noise") == protocol.ALPHA_DEFAULT
 
 
 # --- Normalization --------------------------------------------------------------

@@ -30,7 +30,7 @@ void hb_storage_save(const hb_config_t &cfg)
 
     /* update() and not write(): the byte is only rewritten if it changes.
      * A save that modifies a single field therefore does not consume a write
-     * cycle on all 22 bytes. */
+     * cycle on all 26 bytes. */
     for (uint16_t i = 0; i < HB_RECORD_SIZE; i++) {
         EEPROM.update(HB_EEPROM_ADDR + i, buf[i]);
     }

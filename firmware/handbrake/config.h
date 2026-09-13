@@ -14,21 +14,17 @@
 
 /* Channel A, gain 128: low-noise input, suited to a load cell.
  * The gain is selected by the number of clock pulses after the 24 data
- * bits (25 = A/128, 26 = B/32, 27 = A/64). */
+ * bits (25 = A/128, 26 = B/32, 27 = A/64). The data rate is set by the
+ * HX711 RATE pin, not by the pulse count: with the pin at its default
+ * (ground) the chip converts at 10 samples/s, one reading every 100 ms.
+ * 80 samples/s needs the RATE pin tied to VCC; the chip has no faster rate. */
 #define HB_HX711_GAIN_PULSES 25
-
-/* Exponential filter coefficient. At 80 samples/s, 0.5 gives a time
- * constant of about 12.5 ms and 90% of a step in ~42 ms: the HX711 at gain
- * 128 is very stable and the axis is only quantized to 1/1023, so the extra
- * noise that gets through stays imperceptible, with no latency the hand can
- * feel on the pull or on the release. 0.25 felt mushy. */
-#define HB_EMA_ALPHA 0.5f
 
 /* --- Rates -------------------------------------------------------------- */
 
-/* Telemetry emission period while streaming is active. Deliberately slower
- * than acquisition: the display does not need 80 Hz, and the CDC must not
- * take precedence over the HID loop. */
+/* Telemetry emission period while streaming is active. Throttled so the CDC
+ * must not take precedence over the HID loop; between two sensor readings it
+ * simply resends the last filtered value. */
 #define HB_TELEMETRY_PERIOD_MS 33 /* ~30 Hz */
 
 /* The HID report is sent only when the axis value changed, with this

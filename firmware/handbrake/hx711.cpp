@@ -45,9 +45,9 @@ bool HX711::read(int32_t &out)
      * stretches the pulse and triggers a sleep right in the middle of the
      * read, hence a corrupted sample.
      *
-     * The full frame lasts about 200us, i.e. less than 2% of the time at
-     * 80 samples/s. The USB controller buffers in hardware and loses
-     * nothing over that span.
+     * The full frame lasts about 200us, i.e. well under 1% of the time at
+     * the effective 10 samples/s. The USB controller buffers in hardware
+     * and loses nothing over that span.
      */
     noInterrupts();
 

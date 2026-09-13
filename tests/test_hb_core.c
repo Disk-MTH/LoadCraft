@@ -152,6 +152,7 @@ static void test_config_defaults(void)
 
     CHECK_EQ_INT(cfg.curve, HB_CURVE_LINEAR);
     CHECK_NEAR(cfg.gamma, 1.0f, 1e-6);
+    CHECK_NEAR(cfg.alpha, HB_DEFAULT_ALPHA, 1e-6);
     CHECK_EQ_INT(cfg.calibrated, 0);
     /* Nothing to correct on the default values */
     CHECK_EQ_INT(hb_config_sanitize(&cfg), 0);
@@ -197,6 +198,28 @@ static void test_sanitize_recovers_nan(void)
 
     CHECK_EQ_INT(hb_config_sanitize(&cfg), 1);
     CHECK_NEAR(cfg.gamma, 1.0f, 1e-6);
+}
+
+/* The configurable alpha is bounded the same way: below the floor it would
+ * freeze the axis, above it it is just the unfiltered reading. */
+static void test_sanitize_clamps_alpha(void)
+{
+    hb_config_t cfg;
+
+    hb_config_defaults(&cfg);
+    cfg.alpha = 5.0f;
+    CHECK_EQ_INT(hb_config_sanitize(&cfg), 1);
+    CHECK_NEAR(cfg.alpha, HB_ALPHA_MAX, 1e-6);
+
+    hb_config_defaults(&cfg);
+    cfg.alpha = 0.001f;
+    CHECK_EQ_INT(hb_config_sanitize(&cfg), 1);
+    CHECK_NEAR(cfg.alpha, HB_ALPHA_MIN, 1e-6);
+
+    hb_config_defaults(&cfg);
+    cfg.alpha = (float)NAN;
+    CHECK_EQ_INT(hb_config_sanitize(&cfg), 1);
+    CHECK_NEAR(cfg.alpha, HB_DEFAULT_ALPHA, 1e-6);
 }
 
 static void test_sanitize_clamps_curve_and_range(void)
@@ -271,16 +294,16 @@ static void test_ema_converge(void)
     CHECK_EQ_INT(hb_ema_value(&f), 1000);
 }
 
-/* Responsiveness of the production constant: a step (pulling) and a release
+/* Responsiveness of the default constant: a step (pulling) and a release
  * must both be followed within a few samples, otherwise the handbrake feels
- * "mushy". 90% in 4 samples, i.e. 50 ms at 80 samples/s. */
+ * "mushy". 90% of a step in 4 samples, whatever the effective rate. */
 static void test_ema_reactive_constant_production(void)
 {
     hb_ema_t f;
     int      i;
 
     /* Pull: 0 -> 100000 */
-    hb_ema_init(&f, HB_EMA_ALPHA);
+    hb_ema_init(&f, HB_DEFAULT_ALPHA);
     hb_ema_push(&f, 0);
     for (i = 0; i < 4; i++) {
         hb_ema_push(&f, 100000);
@@ -288,7 +311,7 @@ static void test_ema_reactive_constant_production(void)
     CHECK(hb_ema_value(&f) >= 90000);
 
     /* Release: 100000 -> 0, same time budget */
-    hb_ema_init(&f, HB_EMA_ALPHA);
+    hb_ema_init(&f, HB_DEFAULT_ALPHA);
     hb_ema_push(&f, 100000);
     for (i = 0; i < 4; i++) {
         hb_ema_push(&f, 0);
@@ -425,6 +448,7 @@ int main(void)
     RUN(test_default_uncalibrated_barely_moves);
     RUN(test_sanitize_clamps_gamma);
     RUN(test_sanitize_recovers_nan);
+    RUN(test_sanitize_clamps_alpha);
     RUN(test_sanitize_clamps_curve_and_range);
 
     RUN(test_process_end_to_end);

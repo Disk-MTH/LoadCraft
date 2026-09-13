@@ -22,8 +22,8 @@ extern "C" {
 #endif
 
 #define HB_RECORD_MAGIC   0x48424B31UL /* "HBK1" */
-#define HB_RECORD_VERSION 1
-#define HB_RECORD_SIZE    22
+#define HB_RECORD_VERSION 2
+#define HB_RECORD_SIZE    26
 
 /* Serializes cfg into a buffer of exactly HB_RECORD_SIZE bytes, CRC
  * included. */

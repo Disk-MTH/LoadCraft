@@ -165,6 +165,15 @@ static void apply_command(const hb_cmd_t &cmd)
         send_config();
         break;
 
+    case HB_CMD_SET_ALPHA:
+        config.alpha = cmd.fvalue;
+        hb_config_sanitize(&config);
+        /* Adopt the new coefficient without resetting the filter state: a
+         * re-init would drop the value to zero and take readings to recover. */
+        filter.alpha = config.alpha;
+        send_config();
+        break;
+
     case HB_CMD_SAVE:
         /* Writing only happens on explicit request: a gamma slider that
          * saved on every move would wear the EEPROM out in a few tuning
@@ -263,7 +272,7 @@ void setup()
     Serial.begin(115200); /* rate ignored on CDC, present by convention */
 
     hb_storage_load(config);
-    hb_ema_init(&filter, HB_EMA_ALPHA);
+    hb_ema_init(&filter, config.alpha);
     hb_stuck_init(&stuck, HB_STUCK_TIMEOUT_MS);
     hb_linebuf_init(&line);
 

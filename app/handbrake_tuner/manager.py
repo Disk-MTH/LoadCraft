@@ -187,6 +187,8 @@ class LinkManager:
             "axis_max": protocol.AXIS_MAX,
             "gamma_min": protocol.GAMMA_MIN,
             "gamma_max": protocol.GAMMA_MAX,
+            "alpha_min": protocol.ALPHA_MIN,
+            "alpha_max": protocol.ALPHA_MAX,
         }
         if link is None:
             base.update(

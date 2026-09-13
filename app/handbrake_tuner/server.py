@@ -119,6 +119,16 @@ def create_app(manager: LinkManager) -> Flask:
 
         return _apply(manager, protocol.cmd_set_gamma(gamma))
 
+    @app.post("/api/alpha")
+    def api_alpha():
+        payload = request.get_json(silent=True) or {}
+        try:
+            alpha = protocol.clamp_alpha(float(payload.get("alpha")))
+        except (TypeError, ValueError):
+            return _error("invalid alpha")
+
+        return _apply(manager, protocol.cmd_set_alpha(alpha))
+
     @app.post("/api/<any(save,load,reset):action>")
     def api_action(action: str):
         builder = {

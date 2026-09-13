@@ -53,6 +53,7 @@ void hb_config_defaults(hb_config_t *cfg)
     cfg->raw_max    = HB_DEFAULT_RAW_MAX;
     cfg->curve      = (uint8_t)HB_CURVE_LINEAR;
     cfg->gamma      = 1.0f;
+    cfg->alpha      = HB_DEFAULT_ALPHA;
     cfg->calibrated = 0;
 }
 
@@ -86,6 +87,18 @@ int hb_config_sanitize(hb_config_t *cfg)
         } else {
             /* Neither greater nor less: NaN. Back to neutral. */
             cfg->gamma = 1.0f;
+        }
+        changed = 1;
+    }
+
+    if (!(cfg->alpha >= HB_ALPHA_MIN && cfg->alpha <= HB_ALPHA_MAX)) {
+        if (cfg->alpha > HB_ALPHA_MAX) {
+            cfg->alpha = HB_ALPHA_MAX;
+        } else if (cfg->alpha < HB_ALPHA_MIN) {
+            cfg->alpha = HB_ALPHA_MIN;
+        } else {
+            /* Neither greater nor less: NaN. Back to the default. */
+            cfg->alpha = HB_DEFAULT_ALPHA;
         }
         changed = 1;
     }

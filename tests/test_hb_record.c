@@ -9,6 +9,7 @@ static hb_config_t sample_config(void)
     cfg.raw_max    = -78910;
     cfg.curve      = HB_CURVE_SCURVE;
     cfg.gamma      = 1.75f;
+    cfg.alpha      = 0.75f;
     cfg.calibrated = 1;
     return cfg;
 }
@@ -28,9 +29,10 @@ static void test_round_trip(void)
     CHECK_EQ_INT(dst.raw_max, src.raw_max);
     CHECK_EQ_INT(dst.curve, src.curve);
     CHECK_EQ_INT(dst.calibrated, src.calibrated);
-    /* The float goes through its raw bits: it must come back bit-identical,
-     * not merely "close". */
+    /* The floats go through their raw bits: they must come back
+     * bit-identical, not merely "close". */
     CHECK(dst.gamma == src.gamma);
+    CHECK(dst.alpha == src.alpha);
 }
 
 static void test_round_trip_default_values(void)
@@ -45,6 +47,7 @@ static void test_round_trip_default_values(void)
     CHECK_EQ_INT(dst.raw_min, src.raw_min);
     CHECK_EQ_INT(dst.raw_max, src.raw_max);
     CHECK(dst.gamma == src.gamma);
+    CHECK(dst.alpha == src.alpha);
 }
 
 static void test_round_trip_extremes(void)
@@ -57,12 +60,14 @@ static void test_round_trip_extremes(void)
     src.raw_min = -8388608L;
     src.raw_max = 8388607L;
     src.gamma   = HB_GAMMA_MIN;
+    src.alpha   = HB_ALPHA_MAX;
 
     hb_record_pack(buf, &src);
     CHECK_EQ_INT(hb_record_unpack(buf, &dst), 1);
     CHECK_EQ_INT(dst.raw_min, -8388608L);
     CHECK_EQ_INT(dst.raw_max, 8388607L);
     CHECK_NEAR(dst.gamma, HB_GAMMA_MIN, 1e-6);
+    CHECK_NEAR(dst.alpha, HB_ALPHA_MAX, 1e-6);
 }
 
 /* --- Corruption detection ------------------------------------------------ */
@@ -156,11 +161,13 @@ static void test_out_of_range_values_repaired(void)
 
     hb_config_defaults(&src);
     src.gamma = 999.0f;
+    src.alpha = 999.0f;
     src.curve = 77;
     hb_record_pack(buf, &src);
 
     CHECK_EQ_INT(hb_record_unpack(buf, &dst), 1);
     CHECK_NEAR(dst.gamma, HB_GAMMA_MAX, 1e-6);
+    CHECK_NEAR(dst.alpha, HB_ALPHA_MAX, 1e-6);
     CHECK_EQ_INT(dst.curve, HB_CURVE_LINEAR);
 }
 
@@ -176,6 +183,20 @@ static void test_gamma_nan_repaired(void)
 
     CHECK_EQ_INT(hb_record_unpack(buf, &dst), 1);
     CHECK_NEAR(dst.gamma, 1.0f, 1e-6);
+}
+
+static void test_alpha_nan_repaired(void)
+{
+    hb_config_t src;
+    hb_config_t dst;
+    uint8_t     buf[HB_RECORD_SIZE];
+
+    hb_config_defaults(&src);
+    src.alpha = (float)NAN;
+    hb_record_pack(buf, &src);
+
+    CHECK_EQ_INT(hb_record_unpack(buf, &dst), 1);
+    CHECK_NEAR(dst.alpha, HB_DEFAULT_ALPHA, 1e-6);
 }
 
 /* --- CRC ------------------------------------------------------------------ */
@@ -213,6 +234,7 @@ int main(void)
 
     RUN(test_out_of_range_values_repaired);
     RUN(test_gamma_nan_repaired);
+    RUN(test_alpha_nan_repaired);
 
     RUN(test_crc16_reference_vector);
     RUN(test_crc16_detects_differences);

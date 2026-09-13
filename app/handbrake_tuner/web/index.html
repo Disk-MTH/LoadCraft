@@ -212,6 +212,17 @@
       </div>
     </div>
     <div class="bar"><div class="bar-fill" id="bar"></div><div class="bar-pct" id="bar-pct"></div></div>
+    <div class="gamma-row" style="margin-top:16px">
+      <span style="color:var(--muted)">Filter</span>
+      <input type="range" id="alpha" min="0.10" max="1.00" step="0.05" value="0.50">
+      <span class="gamma-value" id="alpha-value">0.50</span>
+    </div>
+    <p class="gamma-note">
+      Software smoothing of the sensor reading. Higher is more reactive with
+      less smoothing; lower is smoother but lags behind the pull and the
+      release. At the board's 10 readings/s, 0.50 settles in about a third
+      of a second; the higher the value, the snappier.
+    </p>
   </section>
 
   <section class="panel" id="calib-panel">
@@ -379,6 +390,9 @@ function renderConfig() {
   el("gamma-value").textContent = config.gamma.toFixed(2);
   el("gamma").disabled = config.curve === "LINEAR";
   el("gamma-note").textContent = GAMMA_NOTES[config.curve] || "";
+
+  el("alpha").value = config.alpha.toFixed(2);
+  el("alpha-value").textContent = config.alpha.toFixed(2);
 
   if (!config.calibrated) {
     setStatus("Board not calibrated: set the minimum and the maximum first.", "err");
@@ -580,6 +594,18 @@ el("gamma").addEventListener("input", () => {
 el("gamma").addEventListener("change", async () => {
   adoptConfig(
     await guard(() => post("/api/gamma", { gamma: parseFloat(el("gamma").value) }))
+  );
+});
+
+/* Same split as gamma: the readout updates live, the board is written on
+   release. There is no curve to redraw, so `input` only refreshes the value. */
+el("alpha").addEventListener("input", () => {
+  el("alpha-value").textContent = parseFloat(el("alpha").value).toFixed(2);
+});
+
+el("alpha").addEventListener("change", async () => {
+  adoptConfig(
+    await guard(() => post("/api/alpha", { alpha: parseFloat(el("alpha").value) }))
   );
 });
 
