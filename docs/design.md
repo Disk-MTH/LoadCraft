@@ -72,8 +72,11 @@ Broche `RATE` du module reliée à VCC → **80 échantillons/seconde** au lieu 
 Moyenne exponentielle (EMA) : `y[n] = y[n-1] + α·(x[n] − y[n-1])`.
 
 Choisie plutôt qu'une moyenne glissante classique parce qu'elle ne coûte qu'une
-valeur en RAM et une multiplication, sans tampon circulaire. α ≈ 0,25 à 80 SPS
-donne un compromis correct bruit/réactivité (constante de temps ≈ 44 ms).
+valeur en RAM et une multiplication, sans tampon circulaire. α = 0,5 à 80 SPS
+donne une constante de temps d'environ 12,5 ms (90 % d'un pas en ~42 ms) : le
+HX711 en gain 128 est très stable et l'axe n'est quantifié qu'à 1/1023, donc le
+bruit qui passe en plus reste imperceptible. Un coefficient plus bas (0,25)
+se sentait comme une latence au tirage comme au relâchement.
 
 ### 3.3 Normalisation
 

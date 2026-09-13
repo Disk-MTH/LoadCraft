@@ -17,10 +17,12 @@
  * de données (25 = A/128, 26 = B/32, 27 = A/64). */
 #define HB_HX711_GAIN_PULSES 25
 
-/* Coefficient du filtre exponentiel. À 80 échantillons/s, 0,25 donne une
- * constante de temps d'environ 44 ms : le bruit est nettement atténué sans
- * latence perceptible à la main. */
-#define HB_EMA_ALPHA 0.25f
+/* Coefficient du filtre exponentiel. À 80 échantillons/s, 0,5 donne une
+ * constante de temps d'environ 12,5 ms et 90 % d'un pas en ~42 ms : le HX711
+ * en gain 128 est très stable et l'axe n'est quantifié qu'à 1/1023, donc le
+ * bruit qui passe en plus reste imperceptible, sans latence sensible à la
+ * main au tirage comme au relâchement. 0,25 se sentait mou. */
+#define HB_EMA_ALPHA 0.5f
 
 /* --- Cadences ----------------------------------------------------------- */
 

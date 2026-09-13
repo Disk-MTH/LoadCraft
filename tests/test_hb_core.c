@@ -1,3 +1,4 @@
+#include "config.h"
 #include "hb_core.h"
 #include "test_harness.h"
 
@@ -268,6 +269,31 @@ static void test_ema_converge(void)
     CHECK_EQ_INT(hb_ema_value(&f), 1000);
 }
 
+/* Réactivité de la constante de production : un pas (tirer) comme un relâcher
+ * doivent être suivis en quelques échantillons, sinon le frein à main se sent
+ * « mou ». 90 % en 4 échantillons, soit 50 ms à 80 échantillons/s. */
+static void test_ema_reactivite_constante_production(void)
+{
+    hb_ema_t f;
+    int      i;
+
+    /* Tirer : 0 → 100000 */
+    hb_ema_init(&f, HB_EMA_ALPHA);
+    hb_ema_push(&f, 0);
+    for (i = 0; i < 4; i++) {
+        hb_ema_push(&f, 100000);
+    }
+    CHECK(hb_ema_value(&f) >= 90000);
+
+    /* Relâcher : 100000 → 0, même budget en temps */
+    hb_ema_init(&f, HB_EMA_ALPHA);
+    hb_ema_push(&f, 100000);
+    for (i = 0; i < 4; i++) {
+        hb_ema_push(&f, 0);
+    }
+    CHECK(hb_ema_value(&f) <= 10000);
+}
+
 static void test_ema_lisse_le_bruit(void)
 {
     hb_ema_t f;
@@ -347,6 +373,7 @@ int main(void)
 
     RUN(test_ema_adopte_le_premier_echantillon);
     RUN(test_ema_converge);
+    RUN(test_ema_reactivite_constante_production);
     RUN(test_ema_lisse_le_bruit);
     RUN(test_ema_gere_les_valeurs_negatives);
     RUN(test_ema_alpha_invalide_devient_transparent);

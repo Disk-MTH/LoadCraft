@@ -38,7 +38,7 @@ Tout est alimenté par le port USB-C du Pro Micro. Aucune alimentation externe.
 ### Cellule → HX711
 
 | Fil cellule | Borne HX711 |
-|---|---|
+| --- | --- |
 | E+ | E+ |
 | E− | E− |
 | A+ | A+ |
@@ -55,7 +55,7 @@ Inverser E+ et E− est en revanche à éviter.
 ### HX711 → Pro Micro
 
 | HX711 | Pro Micro | Défini dans |
-|---|---|---|
+| --- | --- | --- |
 | VCC | `VCC` | — |
 | GND | `GND` | — |
 | DT | broche 4 | `config.h` → `HB_PIN_HX711_DT` |

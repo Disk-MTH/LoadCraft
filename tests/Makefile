@@ -21,7 +21,8 @@ all: $(BINS)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/test_%: test_%.c $(SOURCES) test_harness.h | $(BUILD)
+$(BUILD)/test_%: test_%.c $(SOURCES) test_harness.h \
+        $(FW)/hb_core.h $(FW)/hb_protocol.h $(FW)/hb_record.h $(FW)/config.h | $(BUILD)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $< $(SOURCES) $(LDLIBS)
 
 test: $(BINS)
