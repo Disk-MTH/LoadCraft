@@ -178,3 +178,21 @@ int32_t hb_ema_value(const hb_ema_t *f)
 {
     return f->primed ? hb_round_i32(f->value) : 0;
 }
+
+void hb_stuck_init(hb_stuck_t *s, uint32_t timeout_ms)
+{
+    s->last           = 0;
+    s->last_change_ms = 0;
+    s->timeout_ms     = timeout_ms;
+    s->primed         = 0;
+}
+
+int hb_stuck_push(hb_stuck_t *s, uint32_t now_ms, int32_t sample)
+{
+    if (!s->primed || sample != s->last) {
+        s->primed         = 1;
+        s->last           = sample;
+        s->last_change_ms = now_ms;
+    }
+    return (now_ms - s->last_change_ms) >= s->timeout_ms;
+}

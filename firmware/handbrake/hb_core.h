@@ -82,6 +82,27 @@ void    hb_ema_reset(hb_ema_t *f);
 int32_t hb_ema_push(hb_ema_t *f, int32_t sample);
 int32_t hb_ema_value(const hb_ema_t *f);
 
+/* Stuck-value detection.
+ *
+ * A raw value that is bit-identical over a whole timeout is a failure
+ * signature (DOUT line stuck, converter locked), never a quiet sensor: a
+ * healthy HX711 at gain 128 has permanent LSB jitter. The threshold is in
+ * time, not in sample count, so it behaves the same at any effective rate.
+ */
+typedef struct {
+    int32_t   last;           /* last value seen */
+    uint32_t  last_change_ms; /* timestamp of the last change */
+    uint32_t  timeout_ms;     /* HB_STUCK_TIMEOUT_MS */
+    int       primed;
+} hb_stuck_t;
+
+void hb_stuck_init(hb_stuck_t *s, uint32_t timeout_ms);
+
+/* Feed a raw sample with its timestamp. Returns 1 while the value has not
+ * changed for at least timeout_ms; the first different sample returns 0
+ * and restarts the timer. */
+int hb_stuck_push(hb_stuck_t *s, uint32_t now_ms, int32_t sample);
+
 #ifdef __cplusplus
 }
 #endif

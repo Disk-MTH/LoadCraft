@@ -345,6 +345,62 @@ static void test_ema_reset(void)
     CHECK_EQ_INT(hb_ema_push(&f, 123), 123);
 }
 
+/* --- Stuck-value detection ------------------------------------------------ */
+
+/* A healthy HX711 at gain 128 has permanent LSB jitter: a bit-identical raw
+ * value for the whole timeout is a failure signature (DOUT line stuck,
+ * converter locked), never a quiet sensor. */
+static void test_stuck_detects_a_frozen_value(void)
+{
+    hb_stuck_t s;
+    uint32_t   timeout = HB_STUCK_TIMEOUT_MS;
+
+    hb_stuck_init(&s, timeout);
+    CHECK_EQ_INT(hb_stuck_push(&s, 0, 1000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout - 1, 1000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + 1, 1000), 1);
+    CHECK_EQ_INT(hb_stuck_push(&s, 5 * timeout, 1000), 1);
+}
+
+static void test_stuck_recovers_on_a_different_value(void)
+{
+    hb_stuck_t s;
+    uint32_t   timeout = HB_STUCK_TIMEOUT_MS;
+
+    hb_stuck_init(&s, timeout);
+    CHECK_EQ_INT(hb_stuck_push(&s, 0, 1000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + 1, 1000), 1);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + 2, 1001), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, 2 * timeout + 1, 1001), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, 2 * timeout + 2, 1001), 1);
+}
+
+/* A change before the threshold restarts the timer: two short episodes of
+ * the same value must not add up to a stuck declaration. */
+static void test_stuck_change_before_threshold_restarts_timer(void)
+{
+    hb_stuck_t s;
+    uint32_t   timeout = HB_STUCK_TIMEOUT_MS;
+
+    hb_stuck_init(&s, timeout);
+    CHECK_EQ_INT(hb_stuck_push(&s, 0, 1000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout / 2, 1000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout / 2 + 1, 2000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + timeout / 2, 2000), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + timeout / 2 + 1, 2000), 1);
+}
+
+static void test_stuck_with_negative_values(void)
+{
+    hb_stuck_t s;
+    uint32_t   timeout = HB_STUCK_TIMEOUT_MS;
+
+    hb_stuck_init(&s, timeout);
+    CHECK_EQ_INT(hb_stuck_push(&s, 0, -5), 0);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + 1, -5), 1);
+    CHECK_EQ_INT(hb_stuck_push(&s, timeout + 2, -4), 0);
+}
+
 int main(void)
 {
     RUN(test_normalize_plage_normale);
@@ -377,6 +433,10 @@ int main(void)
     RUN(test_ema_lisse_le_bruit);
     RUN(test_ema_gere_les_valeurs_negatives);
     RUN(test_ema_alpha_invalide_devient_transparent);
+    RUN(test_stuck_detects_a_frozen_value);
+    RUN(test_stuck_recovers_on_a_different_value);
+    RUN(test_stuck_change_before_threshold_restarts_timer);
+    RUN(test_stuck_with_negative_values);
     RUN(test_ema_reset);
 
     TEST_SUMMARY("hb_core");

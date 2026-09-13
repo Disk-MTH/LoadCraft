@@ -40,6 +40,12 @@
  * dernière valeur lue. */
 #define HB_SENSOR_TIMEOUT_MS 500
 
+/* The raw value has not changed at all for this long: the sensor is
+ * declared stuck (DOUT line stuck, converter locked). A healthy HX711 at
+ * gain 128 has permanent LSB jitter, so this is a failure signature at any
+ * effective rate. */
+#define HB_STUCK_TIMEOUT_MS 1000
+
 /* --- Stockage ----------------------------------------------------------- */
 
 #define HB_EEPROM_ADDR    0
