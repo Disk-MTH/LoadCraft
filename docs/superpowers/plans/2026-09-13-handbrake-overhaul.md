@@ -1986,7 +1986,7 @@ The file below is complete; it keeps the existing visual system (dark theme, pan
 
   <section class="panel span-2">
     <h2>Status</h2>
-    <div id="link-status">Connecting…</div>
+    <div id="link-status">Connecting...</div>
   </section>
 
   <section class="panel span-2" id="live-panel">
@@ -2131,10 +2131,10 @@ function renderStatus() {
     node.textContent = `Connected: ${status.port}${extra}`;
     node.className = "ok";
   } else if (status.state === "busy") {
-    node.textContent = "Connecting…";
+    node.textContent = "Connecting...";
     node.className = "";
   } else if (status.state === "searching") {
-    node.textContent = "Searching for the board…";
+    node.textContent = "Searching for the board...";
     node.className = "";
   } else {
     node.textContent = status.last_error || "Not connected.";
@@ -2772,10 +2772,11 @@ grep -rP '[àâäéèêëîïôöùûüçœÀÂÄÉÈÊËÎÏÔÖÙÛÜÇŒ…«
   --include='*.ino' --include='*.html' --include='*.md' \
   --include='*.toml' --include='*.json' --include='Makefile' . \
   | grep -v '^\./\.git/' | grep -v '^\./app/\.venv/' \
-  | grep -v '^\./app/\.pytest_cache/' | grep -v '^\./\.remember/'
+  | grep -v '^\./app/\.pytest_cache/' | grep -v '^\./\.remember/' \
+  | grep -v '^\./docs/superpowers/'
 ```
 
-Expected: no output. (The `→` arrow in the curve canvas labels is deliberate and is not in the search set.)
+Expected: no output. (The `→` arrow in the curve canvas labels is deliberate and is not in the search set. `docs/superpowers/` is excluded: the design docs legitimately quote the legacy French strings they translate.)
 
 - [ ] **Step 4: Check the tree is clean**
 
