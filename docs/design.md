@@ -325,9 +325,9 @@ own. Manual connect/disconnect endpoints no longer exist.
 
 | Step | Verifies | Status |
 |---|---|---|
-| Native C tests | Curves, normalization, filter, protocol, formatting, EEPROM | ✅ 3425 assertions |
-| pytest tests | Host protocol, serial dialog, server API, ports | ✅ 113 tests |
-| AVR compile | The firmware compiles for the ATmega32u4 | ✅ 62% flash, 26% RAM |
+| Native C tests | Curves, normalization, filter, protocol, formatting, EEPROM | ✅ 3445 assertions |
+| pytest tests | Host protocol, serial dialog, server API, ports | ✅ 138 tests |
+| AVR compile | The firmware compiles for the ATmega32u4 | ✅ 63% flash, 27% RAM |
 | HID enumeration | The system sees a one-axis joystick | ✅ Linux, `ABS_X` only |
 | Protocol on hardware | PING, GET, STREAM, SET, RESET, errors | ✅ |
 | Blank EEPROM | Fallback to the defaults, `calibrated=0` | ✅ |
