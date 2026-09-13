@@ -16,8 +16,8 @@ venv/
 # Arduino / PlatformIO
 .pio/
 
-# VS Code : la configuration partagée est versionnée, seuls les fichiers
-# propres à chaque poste sont ignorés.
+# VS Code: the shared configuration is versioned; only per-machine
+# files are ignored.
 .vscode/*.log
 .vscode/ipch/
 .vscode/*.local.json

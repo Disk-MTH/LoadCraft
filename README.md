@@ -15,9 +15,9 @@ Load cell 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> 
 
 | Part | Status |
 |---|---|
-| Firmware core (curves, filter, protocol, EEPROM) | ✅ 3425 native assertions |
-| Hardware layer + sketch | ✅ compiles, 62% flash / 26% RAM |
-| Calibration app | ✅ 113 tests |
+| Firmware core (curves, filter, protocol, EEPROM) | ✅ 3445 native assertions |
+| Hardware layer + sketch | ✅ compiles, 63% flash / 27% RAM |
+| Calibration app | ✅ 138 tests |
 | **Flashed and recognized board** | ✅ one `ABS_X` axis, on `/dev/input/js2` |
 | **Serial protocol on real hardware** | ✅ PING/GET/STREAM/SET/RESET verified |
 | Load cell reading | ⏳ HX711 not wired yet |
@@ -25,7 +25,7 @@ Load cell 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> 
 
 The board works and talks. What remains to be validated comes down to the
 sensor itself: real HX711 noise, useful range, mechanical durability, and
-the in-game feel that will decide the curve. Details in `docs/design.md` §9.
+the in-game feel that will decide the curve. Details in `docs/design.md` §11.
 
 ## Hardware
 
@@ -100,7 +100,7 @@ make build                       # arduino:avr:leonardo by default
 make flash PORT=/dev/ttyACM0     # upload
 ```
 
-Observed usage: 17896 bytes of flash (62%), 687 bytes of RAM (26%).
+Observed usage: 18112 bytes of flash (63%), 707 bytes of RAM (27%).
 
 **The FQBN depends on the clone's bootloader.** Many Pro Micros ship with
 the Leonardo bootloader and identify as `2341:8036`. Others present as
