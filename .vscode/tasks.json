@@ -2,84 +2,45 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Tests: all",
-      "type": "shell",
-      "command": "make test",
-      "group": { "kind": "test", "isDefault": true },
-      "problemMatcher": ["$gcc"],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
-    },
-    {
-      "label": "Tests: firmware (native)",
-      "type": "shell",
-      "command": "make test-firmware",
-      "group": "test",
-      "problemMatcher": ["$gcc"],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
-    },
-    {
-      "label": "Tests: app",
-      "type": "shell",
-      "command": "make test-app",
-      "group": "test",
-      "problemMatcher": [],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
-    },
-    {
-      "label": "Firmware: compile",
+      "label": "build",
       "type": "shell",
       "command": "make build",
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": ["$gcc"],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+      "presentation": { "reveal": "always" }
     },
     {
-      "label": "Firmware: detect the board",
-      "detail": "Shows the port and the FQBN to use for the upload.",
+      "label": "test",
       "type": "shell",
-      "command": "make detect",
-      "problemMatcher": [],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+      "command": "make test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "always" }
     },
     {
-      "label": "Firmware: upload",
-      "detail": "Compiles then sends to the board. Asks for the port.",
+      "label": "flash",
       "type": "shell",
       "command": "make flash PORT=${input:serialPort}",
-      "dependsOn": "Firmware: compile",
       "problemMatcher": [],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+      "presentation": { "reveal": "always" }
     },
     {
-      "label": "App: launch",
-      "detail": "Opens the calibration app (native window or browser).",
+      "label": "clean",
       "type": "shell",
-      "command": "${workspaceFolder}/app/.venv/bin/python -m handbrake_tuner",
-      "options": { "cwd": "${workspaceFolder}/app" },
-      "problemMatcher": [],
-      "isBackground": true,
-      "presentation": { "reveal": "always", "panel": "dedicated" }
+      "command": "make clean"
     },
     {
-      "label": "App: set up the Python environment",
+      "label": "build: firmware tests",
       "type": "shell",
-      "command": "make setup-app",
-      "problemMatcher": [],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
-    },
-    {
-      "label": "Clean",
-      "type": "shell",
-      "command": "make clean",
-      "problemMatcher": [],
-      "presentation": { "reveal": "silent", "panel": "shared" }
+      "command": "make -C tests",
+      "problemMatcher": ["$gcc"]
     }
   ],
   "inputs": [
     {
       "id": "serialPort",
       "type": "promptString",
-      "description": "Serial port of the board (see \"Firmware: detect the board\")",
+      "description": "Serial port of the board",
       "default": "/dev/ttyACM0"
     }
   ]
