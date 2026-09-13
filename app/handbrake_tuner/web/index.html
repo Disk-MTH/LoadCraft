@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Calibration du handbrake</title>
+<title>Handbrake calibration</title>
 <style>
   :root {
     --bg: #12151a;
@@ -59,24 +59,14 @@
     padding: 18px;
   }
 
-  /* --- Connexion --- */
-  .connect-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  select, button {
-    font: inherit;
-    color: var(--text);
-    background: var(--panel-alt);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 8px 12px;
-    cursor: pointer;
-  }
-  select { flex: 1; min-width: 200px; cursor: default; }
-  button:hover:not(:disabled) { border-color: var(--accent-dim); }
-  button:disabled { opacity: .4; cursor: not-allowed; }
-  button.primary { background: var(--accent-dim); border-color: var(--accent-dim); }
-  button.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  /* --- Status ------------------------------------------------------------ */
 
-  /* --- Mesure temps réel --- */
+  #link-status { font-size: 14px; min-height: 20px; }
+  #link-status.ok  { color: var(--ok); }
+  #link-status.err { color: var(--err); }
+
+  /* --- Live measurement ---------------------------------------------------- */
+
   .readouts { display: flex; gap: 28px; margin-bottom: 16px; flex-wrap: wrap; }
   .readout .label {
     font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
@@ -88,6 +78,9 @@
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
   }
+
+  .sensor-warn { color: var(--warn); font-size: 12px; margin: 0 0 10px; }
+  .hidden { display: none; }
 
   .bar {
     height: 30px;
@@ -110,7 +103,8 @@
     text-shadow: 0 1px 3px rgba(0,0,0,.7);
   }
 
-  /* --- Calibration --- */
+  /* --- Calibration ---------------------------------------------------------- */
+
   .calib-row {
     display: flex; align-items: center; gap: 12px;
     padding: 10px 0;
@@ -118,14 +112,31 @@
   }
   .calib-row:last-of-type { border-bottom: none; }
   .calib-row .name { width: 74px; color: var(--muted); font-size: 13px; }
-  .calib-row .stored {
-    flex: 1; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  .calib-row input[type=number] {
+    flex: 1;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
   }
+  .calib-row input[type=number]:focus { outline: none; border-color: var(--accent-dim); }
   .hint { color: var(--muted); font-size: 12px; margin: 12px 0 0; }
 
-  /* --- Courbe --- */
+  /* --- Curve ----------------------------------------------------------------- */
+
   .curve-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-  .curve-tabs button { flex: 1; font-size: 13px; }
+  .curve-tabs button {
+    flex: 1; font: inherit;
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
   .curve-tabs button[aria-pressed="true"] {
     background: var(--accent-dim); border-color: var(--accent-dim);
   }
@@ -142,11 +153,26 @@
   }
   .gamma-note { color: var(--muted); font-size: 12px; margin: 10px 0 0; min-height: 32px; }
 
-  /* --- Persistance --- */
+  /* --- Persistence ------------------------------------------------------------- */
+
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  .actions button:hover:not(:disabled) { border-color: var(--accent-dim); }
+  .actions button:disabled { opacity: .4; cursor: not-allowed; }
+  .actions button.primary { background: var(--accent-dim); border-color: var(--accent-dim); }
+  .actions button.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
   .dirty-flag { color: var(--warn); font-size: 12px; margin-top: 12px; min-height: 18px; }
 
-  /* --- Statut --- */
+  /* --- Status bar ---------------------------------------------------------------- */
+
   #status {
     margin-top: 16px; padding: 10px 14px; border-radius: 6px;
     font-size: 13px; min-height: 40px;
@@ -164,28 +190,24 @@
   <h1 class="span-2">Handbrake — calibration</h1>
 
   <section class="panel span-2">
-    <h2>Connexion</h2>
-    <div class="connect-row">
-      <select id="ports"><option value="">Recherche des ports…</option></select>
-      <button id="refresh">Actualiser</button>
-      <button id="connect" class="primary">Connecter</button>
-      <button id="disconnect" disabled>Déconnecter</button>
-    </div>
+    <h2>Status</h2>
+    <div id="link-status">Connecting...</div>
   </section>
 
   <section class="panel span-2" id="live-panel">
-    <h2>Mesure</h2>
+    <h2>Measurement</h2>
+    <p class="sensor-warn hidden" id="sensor-warn">Sensor: no valid data</p>
     <div class="readouts">
       <div class="readout">
-        <div class="label">Valeur brute</div>
+        <div class="label">Raw value</div>
         <div class="value" id="raw">—</div>
       </div>
       <div class="readout">
-        <div class="label">Axe HID</div>
+        <div class="label">HID axis</div>
         <div class="value" id="axis">—</div>
       </div>
       <div class="readout">
-        <div class="label">Sortie</div>
+        <div class="label">Output</div>
         <div class="value" id="out">—</div>
       </div>
     </div>
@@ -193,30 +215,28 @@
   </section>
 
   <section class="panel" id="calib-panel">
-    <h2>Plage</h2>
+    <h2>Range</h2>
     <div class="calib-row">
       <span class="name">Minimum</span>
-      <span class="stored" id="cfg-min">—</span>
-      <button id="set-min">Définir ici</button>
+      <input type="number" id="raw-min" min="-8388608" max="8388607" step="1" disabled>
     </div>
     <div class="calib-row">
       <span class="name">Maximum</span>
-      <span class="stored" id="cfg-max">—</span>
-      <button id="set-max">Définir ici</button>
+      <input type="number" id="raw-max" min="-8388608" max="8388607" step="1" disabled>
     </div>
     <p class="hint">
-      Levier au repos, cliquez « Définir ici » sur la ligne Minimum. Puis
-      tirez à la force que vous voulez voir correspondre au frein à fond, et
-      cliquez sur la ligne Maximum.
+      Type the raw value each end of the stroke should map to: lever at rest
+      for the minimum, full braking force for the maximum. The live raw value
+      is in the Measurement panel above.
     </p>
   </section>
 
   <section class="panel" id="curve-panel">
-    <h2>Courbe de réponse</h2>
+    <h2>Response curve</h2>
     <div class="curve-tabs">
-      <button data-curve="LINEAR" aria-pressed="false">Linéaire</button>
-      <button data-curve="POWER" aria-pressed="false">Puissance</button>
-      <button data-curve="SCURVE" aria-pressed="false">Courbe en S</button>
+      <button data-curve="LINEAR" aria-pressed="false">Linear</button>
+      <button data-curve="POWER" aria-pressed="false">Power</button>
+      <button data-curve="SCURVE" aria-pressed="false">S-curve</button>
     </div>
     <div class="gamma-row">
       <span style="color:var(--muted)">gamma</span>
@@ -228,21 +248,21 @@
   </section>
 
   <section class="panel span-2" id="persist-panel">
-    <h2>Enregistrement</h2>
+    <h2>Storage</h2>
     <div class="actions">
-      <button id="save" class="primary">Sauvegarder dans la carte</button>
-      <button id="load">Recharger le dernier enregistrement</button>
-      <button id="reset">Valeurs par défaut</button>
+      <button id="save" class="primary">Save to the board</button>
+      <button id="load">Reload last save</button>
+      <button id="reset">Defaults</button>
     </div>
     <div class="dirty-flag" id="dirty"></div>
     <p class="hint">
-      Les réglages agissent immédiatement mais restent en mémoire vive. Sans
-      sauvegarde, ils sont perdus au débranchement — l'EEPROM n'est écrite que
-      sur demande, pour ne pas l'user à chaque mouvement du curseur.
+      Changes apply immediately but live in RAM only. Without a save they are
+      lost when the board is unplugged — the EEPROM is written on demand only,
+      so it is not worn out by every slider move.
     </p>
   </section>
 
-  <div class="span-2" id="status">Non connecté.</div>
+  <div class="span-2" id="status">—</div>
 </div>
 
 <script>
@@ -251,28 +271,32 @@
 const el = (id) => document.getElementById(id);
 
 const state = {
-  connected: false,
+  status: null,     /* last /api/status payload */
   config: null,
   telemetry: null,
   dirty: false,
   events: null,
 };
 
+/* HX711 24-bit signed range: the same bounds the firmware clamps to. */
+const RAW_MIN = -8388608;
+const RAW_MAX = 8388607;
+
 const GAMMA_NOTES = {
-  LINEAR: "Sortie proportionnelle à la force. Le point de repère neutre.",
-  POWER: "gamma < 1 : mordant dès le début de course. " +
-         "gamma > 1 : progressif, plus de précision en début de course.",
-  SCURVE: "gamma > 1 : doux aux extrémités, franc au milieu. " +
-          "gamma < 1 : l'inverse.",
+  LINEAR: "Output proportional to force. The neutral reference point.",
+  POWER: "gamma < 1: biting from the start of the stroke. " +
+         "gamma > 1: progressive, more precision at the start.",
+  SCURVE: "gamma > 1: soft at the ends, firm in the middle. " +
+          "gamma < 1: the reverse.",
 };
 
-/* --- Appels API ---------------------------------------------------------- */
+/* --- API calls ---------------------------------------------------------- */
 
 async function api(path, options) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `erreur ${response.status}`);
+    throw new Error(payload.error || `error ${response.status}`);
   }
   return payload;
 }
@@ -300,24 +324,47 @@ async function guard(action, successMessage) {
   }
 }
 
-/* --- Rendu --------------------------------------------------------------- */
+/* --- Rendering ----------------------------------------------------------- */
 
-function renderConnection() {
-  el("connect").disabled = state.connected;
-  el("disconnect").disabled = !state.connected;
-  el("ports").disabled = state.connected;
+function renderStatus() {
+  const status = state.status;
+  const node = el("link-status");
+  if (!status) return;
 
-  for (const id of ["live-panel", "calib-panel", "curve-panel", "persist-panel"]) {
-    el(id).classList.toggle("offline", !state.connected);
+  if (status.connected) {
+    const extra = status.port_description ? ` (${status.port_description})` : "";
+    node.textContent = `Connected: ${status.port}${extra}`;
+    node.className = "ok";
+  } else if (status.state === "busy") {
+    node.textContent = "Connecting...";
+    node.className = "";
+  } else if (status.state === "searching") {
+    node.textContent = "Searching for the board...";
+    node.className = "";
+  } else {
+    node.textContent = status.last_error || "Not connected.";
+    node.className = "err";
   }
+
+  const offline = !status.connected;
+  for (const id of ["live-panel", "calib-panel", "curve-panel", "persist-panel"]) {
+    el(id).classList.toggle("offline", offline);
+  }
+  el("raw-min").disabled = offline;
+  el("raw-max").disabled = offline;
 }
 
 function renderConfig() {
   const config = state.config;
   if (!config) return;
 
-  el("cfg-min").textContent = config.raw_min.toLocaleString("fr-FR");
-  el("cfg-max").textContent = config.raw_max.toLocaleString("fr-FR");
+  /* Resync from the board, except the field currently being edited. */
+  if (document.activeElement !== el("raw-min")) {
+    el("raw-min").value = config.raw_min;
+  }
+  if (document.activeElement !== el("raw-max")) {
+    el("raw-max").value = config.raw_max;
+  }
 
   for (const button of document.querySelectorAll(".curve-tabs button")) {
     button.setAttribute("aria-pressed", String(button.dataset.curve === config.curve));
@@ -329,10 +376,7 @@ function renderConfig() {
   el("gamma-note").textContent = GAMMA_NOTES[config.curve] || "";
 
   if (!config.calibrated) {
-    setStatus(
-      "Carte non calibrée : réglez d'abord le minimum et le maximum.",
-      "err"
-    );
+    setStatus("Board not calibrated: set the minimum and the maximum first.", "err");
   }
   drawCurve();
 }
@@ -341,9 +385,10 @@ function renderTelemetry() {
   const telemetry = state.telemetry;
   if (!telemetry) return;
 
-  el("raw").textContent = telemetry.raw.toLocaleString("fr-FR");
+  el("raw").textContent = telemetry.raw.toLocaleString("en-US");
   el("axis").textContent = telemetry.axis;
   el("out").textContent = telemetry.out.toFixed(3);
+  el("sensor-warn").classList.toggle("hidden", telemetry.sensor !== false);
 
   const percent = telemetry.out * 100;
   el("bar").style.width = percent + "%";
@@ -354,14 +399,45 @@ function renderTelemetry() {
 function setDirty(value) {
   state.dirty = value;
   el("dirty").textContent = value
-    ? "Modifications non sauvegardées dans la carte."
+    ? "Unsaved changes on the board."
     : "";
 }
 
-/* --- Tracé de la courbe --------------------------------------------------- */
+/* --- Range fields ---------------------------------------------------------- */
 
-/* Miroir de hb_curve_apply (firmware) et de protocol.apply_curve (serveur) :
-   l'aperçu doit montrer exactement ce que la carte calcule. */
+/* Commits the edited bound. `change` fires on Enter or on blur, and only
+   when the value actually changed. */
+async function commitBound(id, bound) {
+  const field = el(id);
+  const text = field.value.trim();
+  if (!/^-?\d+$/.test(text)) {
+    setStatus("Range value must be an integer.", "err");
+    return;
+  }
+  const value = parseInt(text, 10);
+  if (value < RAW_MIN || value > RAW_MAX) {
+    setStatus("Range value outside the HX711 24-bit range.", "err");
+    return;
+  }
+  const current = state.config
+    ? (bound === "min" ? state.config.raw_min : state.config.raw_max)
+    : null;
+  if (value === current) return;
+
+  const data = await guard(() => post(`/api/calibrate/${bound}`, { value }));
+  if (!data) {
+    field.value = current === null ? "" : current; /* revert */
+    return;
+  }
+  state.config = data.config;
+  renderConfig();
+  setDirty(true);
+}
+
+/* --- Curve preview --------------------------------------------------------- */
+
+/* Mirror of hb_curve_apply (firmware) and protocol.apply_curve (server):
+   the preview must show exactly what the board computes. */
 function applyCurve(curve, gamma, t) {
   t = Math.max(0, Math.min(1, t));
   if (curve === "POWER") return Math.pow(t, gamma);
@@ -399,7 +475,7 @@ function drawCurve() {
 
   context.clearRect(0, 0, width, height);
 
-  // Grille au quart
+  // Quarter grid
   context.strokeStyle = "#2c323d";
   context.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
@@ -410,7 +486,7 @@ function drawCurve() {
     context.stroke();
   }
 
-  // Diagonale de référence : repère visuel de la réponse linéaire
+  // Reference diagonal: visual mark of the linear response
   context.strokeStyle = "#3a424f";
   context.setLineDash([5, 5]);
   context.beginPath();
@@ -419,7 +495,7 @@ function drawCurve() {
   context.stroke();
   context.setLineDash([]);
 
-  // Courbe
+  // Curve
   context.strokeStyle = "#4da3ff";
   context.lineWidth = 2.5;
   context.beginPath();
@@ -431,7 +507,7 @@ function drawCurve() {
   }
   context.stroke();
 
-  // Position courante
+  // Current position
   const position = currentPosition();
   if (position) {
     context.strokeStyle = "#45c37a";
@@ -449,98 +525,18 @@ function drawCurve() {
     context.fill();
   }
 
-  // Repères d'axes
+  // Axis labels
   context.fillStyle = "#8b95a7";
   context.font = "11px system-ui, sans-serif";
   context.fillText("force →", x(0.5) - 20, height - 8);
   context.save();
   context.translate(11, y(0.5) + 22);
   context.rotate(-Math.PI / 2);
-  context.fillText("sortie →", 0, 0);
+  context.fillText("output →", 0, 0);
   context.restore();
 }
 
-/* --- Flux temps réel ------------------------------------------------------ */
-
-function openStream() {
-  closeStream();
-  state.events = new EventSource("/api/stream");
-  state.events.onmessage = (event) => {
-    state.telemetry = JSON.parse(event.data);
-    renderTelemetry();
-  };
-  state.events.onerror = () => {
-    /* EventSource se reconnecte seul ; inutile d'alarmer l'utilisateur à
-       chaque hoquet. Une vraie perte de carte remonte via les commandes. */
-  };
-}
-
-function closeStream() {
-  if (state.events) {
-    state.events.close();
-    state.events = null;
-  }
-}
-
-/* --- Actions -------------------------------------------------------------- */
-
-async function refreshPorts() {
-  const data = await guard(() => api("/api/ports"));
-  if (!data) return;
-
-  const select = el("ports");
-  const previous = select.value;
-  select.innerHTML = "";
-
-  if (data.ports.length === 0) {
-    select.innerHTML = '<option value="">Aucun port détecté</option>';
-    return;
-  }
-  for (const port of data.ports) {
-    const option = document.createElement("option");
-    option.value = port.device;
-    option.textContent = port.description
-      ? `${port.device} — ${port.description}`
-      : port.device;
-    select.appendChild(option);
-  }
-  if (previous) select.value = previous;
-}
-
-function adoptStatus(data) {
-  state.connected = data.connected;
-  state.config = data.config;
-  state.telemetry = data.telemetry;
-  renderConnection();
-  renderConfig();
-  renderTelemetry();
-}
-
-async function connect() {
-  const port = el("ports").value;
-  if (!port) {
-    setStatus("Sélectionnez un port.", "err");
-    return;
-  }
-  setStatus("Connexion…");
-  const data = await guard(() => post("/api/connect", { port }));
-  if (!data) return;
-
-  adoptStatus(data);
-  setDirty(false);
-  openStream();
-  if (data.config && data.config.calibrated) {
-    setStatus(`Connecté sur ${data.port}.`, "ok");
-  }
-}
-
-async function disconnect() {
-  closeStream();
-  const data = await guard(() => post("/api/disconnect"));
-  if (data) adoptStatus(data);
-  setDirty(false);
-  setStatus("Déconnecté.");
-}
+/* --- Actions ---------------------------------------------------------------- */
 
 function adoptConfig(data, message) {
   if (!data) return;
@@ -550,26 +546,6 @@ function adoptConfig(data, message) {
   if (message) setStatus(message, "ok");
 }
 
-/* --- Branchements --------------------------------------------------------- */
-
-el("refresh").addEventListener("click", refreshPorts);
-el("connect").addEventListener("click", connect);
-el("disconnect").addEventListener("click", disconnect);
-
-el("set-min").addEventListener("click", async () => {
-  adoptConfig(
-    await guard(() => post("/api/calibrate/min")),
-    "Minimum enregistré en mémoire vive."
-  );
-});
-
-el("set-max").addEventListener("click", async () => {
-  adoptConfig(
-    await guard(() => post("/api/calibrate/max")),
-    "Maximum enregistré en mémoire vive."
-  );
-});
-
 for (const button of document.querySelectorAll(".curve-tabs button")) {
   button.addEventListener("click", async () => {
     const curve = button.dataset.curve;
@@ -578,14 +554,14 @@ for (const button of document.querySelectorAll(".curve-tabs button")) {
         curve,
         gamma: parseFloat(el("gamma").value),
       })),
-      `Courbe : ${button.textContent}.`
+      `Curve: ${button.textContent}.`
     );
   });
 }
 
-/* Le curseur redessine l'aperçu à chaque pixel, mais n'écrit sur le port
-   série qu'au relâchement : envoyer à chaque mouvement saturerait la liaison
-   sans rien apporter de perceptible. */
+/* The slider redraws the preview on every pixel but only writes to the
+   serial port on release: sending on every move would saturate the link
+   without any perceptible gain. */
 el("gamma").addEventListener("input", () => {
   el("gamma-value").textContent = parseFloat(el("gamma").value).toFixed(2);
   drawCurve();
@@ -603,7 +579,7 @@ el("save").addEventListener("click", async () => {
   state.config = data.config;
   renderConfig();
   setDirty(false);
-  setStatus("Configuration écrite dans la carte.", "ok");
+  setStatus("Configuration saved to the board.", "ok");
 });
 
 el("load").addEventListener("click", async () => {
@@ -612,7 +588,7 @@ el("load").addEventListener("click", async () => {
   state.config = data.config;
   renderConfig();
   setDirty(false);
-  setStatus("Dernier enregistrement rechargé.", "ok");
+  setStatus("Last save reloaded.", "ok");
 });
 
 el("reset").addEventListener("click", async () => {
@@ -621,24 +597,60 @@ el("reset").addEventListener("click", async () => {
   state.config = data.config;
   renderConfig();
   setDirty(true);
-  setStatus("Valeurs par défaut chargées. Sauvegardez pour les conserver.", "ok");
+  setStatus("Defaults loaded. Save to keep them.", "ok");
 });
 
-window.addEventListener("beforeunload", closeStream);
+for (const [id, bound] of [["raw-min", "min"], ["raw-max", "max"]]) {
+  el(id).addEventListener("change", () => commitBound(id, bound));
+}
 
-/* --- Démarrage ------------------------------------------------------------ */
+/* --- Telemetry stream --------------------------------------------------------- */
+
+function openStream() {
+  state.events = new EventSource("/api/stream");
+  state.events.onmessage = (event) => {
+    state.telemetry = JSON.parse(event.data);
+    renderTelemetry();
+  };
+  /* onerror: the EventSource reconnects by itself. The server answers 409
+     until the link manager is back up; the next retry picks the link up. */
+}
+
+/* --- Status polling ----------------------------------------------------------- */
+
+async function pollStatus() {
+  let data;
+  try {
+    data = await api("/api/status");
+  } catch (error) {
+    return; /* server unreachable: keep the current UI */
+  }
+
+  const wasConnected = state.status ? state.status.connected : false;
+  state.status = data;
+  state.config = data.config;
+  if (wasConnected && !data.connected) {
+    setDirty(false); /* the RAM settings were lost with the board */
+  }
+  renderStatus();
+  renderConfig();
+}
+
+/* --- Boot ---------------------------------------------------------------------- */
 
 (async function boot() {
-  renderConnection();
-  await refreshPorts();
-  const data = await guard(() => api("/api/status"));
-  if (data && data.connected) {
-    adoptStatus(data);
-    openStream();
-    setStatus(`Connecté sur ${data.port}.`, "ok");
-  }
+  openStream();
+  await pollStatus();
   drawCurve();
+  setInterval(pollStatus, 1000);
 })();
+
+window.addEventListener("beforeunload", () => {
+  if (state.events) {
+    state.events.close();
+    state.events = null;
+  }
+});
 </script>
 </body>
 </html>
