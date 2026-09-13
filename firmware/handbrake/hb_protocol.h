@@ -70,9 +70,9 @@ size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals);
 /* "CFG min=… max=… curve=… gamma=… calibrated=…" */
 size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg);
 
-/* "T raw=… out=… axis=…" */
+/* "T raw=… out=… axis=… s=…" — s=1 with a valid sample, s=0 otherwise. */
 size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
-                           uint16_t axis);
+                           uint16_t axis, int sensor_ok);
 
 /* --- Accumulation de ligne --------------------------------------------- */
 

@@ -33,6 +33,7 @@ static HX711 sensor(HB_PIN_HX711_DT, HB_PIN_HX711_SCK, HB_HX711_GAIN_PULSES);
 
 static hb_config_t  config;
 static hb_ema_t     filter;
+static hb_stuck_t   stuck;
 static hb_linebuf_t line;
 
 static int32_t  filtered_raw   = 0;
@@ -90,7 +91,7 @@ static void send_telemetry()
     float unit = have_sample ? hb_process(&config, filtered_raw) : 0.0f;
 
     if (hb_format_telemetry(buf, sizeof buf, filtered_raw, unit,
-                            hb_axis_from_unit(unit))) {
+                            hb_axis_from_unit(unit), have_sample)) {
         reply(buf);
     }
 }
@@ -225,6 +226,17 @@ static void poll_sensor()
     if (sensor.read(raw)) {
         last_sample_ms = millis();
 
+        if (hb_stuck_push(&stuck, last_sample_ms, raw)) {
+            /* The raw value has not moved at all for a timeout: the DOUT
+             * line is stuck or the converter is locked. Same treatment as a
+             * missing sensor: the axis falls back to zero instead of
+             * freezing, and the warmup restarts. */
+            have_sample = false;
+            hb_ema_reset(&filter);
+            warmup_left = WARMUP_SAMPLES;
+            return;
+        }
+
         if (warmup_left > 0) {
             warmup_left--;
             return;
@@ -235,8 +247,8 @@ static void poll_sensor()
         return;
     }
 
-    /* Capteur muet : l'axe retombe à zéro plutôt que de rester figé sur la
-     * dernière valeur, qui pourrait être un frein à fond. */
+    /* Silent sensor: the axis falls back to zero rather than staying frozen
+     * on the last value, which could be a full brake. */
     if (have_sample && (millis() - last_sample_ms) > HB_SENSOR_TIMEOUT_MS) {
         have_sample = false;
         hb_ema_reset(&filter);
@@ -252,6 +264,7 @@ void setup()
 
     hb_storage_load(config);
     hb_ema_init(&filter, HB_EMA_ALPHA);
+    hb_stuck_init(&stuck, HB_STUCK_TIMEOUT_MS);
     hb_linebuf_init(&line);
 
     sensor.begin();

@@ -330,7 +330,7 @@ size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg)
 }
 
 size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
-                           uint16_t axis)
+                           uint16_t axis, int sensor_ok)
 {
     char obuf[16];
     int  n;
@@ -340,8 +340,8 @@ size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
     }
 
     hb_fmt_fixed(obuf, sizeof obuf, unit, 3);
-    n = snprintf(buf, size, "T raw=%ld out=%s axis=%u", (long)raw, obuf,
-                 (unsigned)axis);
+    n = snprintf(buf, size, "T raw=%ld out=%s axis=%u s=%d", (long)raw,
+                 obuf, (unsigned)axis, sensor_ok ? 1 : 0);
 
     if (n < 0 || (size_t)n >= size) {
         buf[0] = '\0';

@@ -315,11 +315,21 @@ static void test_format_telemetry(void)
 {
     char buf[HB_REPLY_MAX];
 
-    hb_format_telemetry(buf, sizeof buf, 123456, 0.75f, 767);
-    CHECK_STR(buf, "T raw=123456 out=0.750 axis=767");
+    hb_format_telemetry(buf, sizeof buf, 123456, 0.75f, 767, 1);
+    CHECK_STR(buf, "T raw=123456 out=0.750 axis=767 s=1");
 
-    hb_format_telemetry(buf, sizeof buf, -8388608L, 0.0f, 0);
-    CHECK_STR(buf, "T raw=-8388608 out=0.000 axis=0");
+    hb_format_telemetry(buf, sizeof buf, -8388608L, 0.0f, 0, 1);
+    CHECK_STR(buf, "T raw=-8388608 out=0.000 axis=0 s=1");
+}
+
+/* s=0 : no valid sample (stuck sensor or sensor-absent timeout). Old hosts
+ * ignore the field; the host parser defaults a missing s to 1. */
+static void test_format_telemetry_sans_capteur(void)
+{
+    char buf[HB_REPLY_MAX];
+
+    hb_format_telemetry(buf, sizeof buf, 123456, 0.0f, 0, 0);
+    CHECK_STR(buf, "T raw=123456 out=0.000 axis=0 s=0");
 }
 
 static void test_format_tampon_trop_petit(void)
@@ -330,7 +340,7 @@ static void test_format_tampon_trop_petit(void)
     hb_config_defaults(&cfg);
     CHECK_EQ_INT(hb_format_config(buf, sizeof buf, &cfg), 0);
     CHECK_STR(buf, "");
-    CHECK_EQ_INT(hb_format_telemetry(buf, sizeof buf, 123456, 0.5f, 512), 0);
+    CHECK_EQ_INT(hb_format_telemetry(buf, sizeof buf, 123456, 0.5f, 512, 1), 0);
     CHECK_STR(buf, "");
 }
 
@@ -442,6 +452,7 @@ int main(void)
     RUN(test_format_config);
     RUN(test_format_config_pire_cas);
     RUN(test_format_telemetry);
+    RUN(test_format_telemetry_sans_capteur);
     RUN(test_format_tampon_trop_petit);
 
     RUN(test_linebuf_ligne_simple);
