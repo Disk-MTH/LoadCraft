@@ -41,6 +41,8 @@ class FakeBoard:
                 self._handle(line)
 
     def readline(self) -> bytes:
+        if self._closed.is_set():
+            raise OSError("port closed")
         try:
             return self._out.get(timeout=0.05)
         except queue.Empty:
