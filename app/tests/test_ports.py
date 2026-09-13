@@ -86,6 +86,16 @@ def test_aucun_port(fake_comports):
     assert link.list_ports() == []
 
 
+def test_port_dict_exposes_vid_pid(fake_comports):
+    """The manager recognizes the board by its USB identifier."""
+    fake_comports.append(
+        FakePort("/dev/ttyACM0", "Pro Micro", vid=0x2341, pid=0x8037)
+    )
+    port = link.list_ports()[0]
+    assert port["vid"] == 0x2341
+    assert port["pid"] == 0x8037
+
+
 def test_pyserial_absent(monkeypatch):
     """L'app doit rester diagnosticable si pyserial manque, pas exploser."""
     monkeypatch.setitem(sys.modules, "serial", None)

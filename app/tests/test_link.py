@@ -12,6 +12,8 @@ from handbrake_tuner import protocol
 from handbrake_tuner.link import LinkError, SerialLink
 from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
 
+from fake_board import FakeBoard
+
 
 def wait_for(predicate, timeout: float = 2.0) -> bool:
     deadline = time.monotonic() + timeout
@@ -205,3 +207,43 @@ def test_thread_survit_a_une_erreur_de_lecture():
         assert "débranchée" in connection.last_error
     finally:
         connection.close()
+
+
+# --- Dead link -------------------------------------------------------------
+
+
+def test_dead_after_read_thread_failure():
+    """When the board is unplugged the read thread dies: the link must be
+    observable as dead, not as 'connected but silent'."""
+    class Broken:
+        def write(self, data):
+            pass
+
+        def readline(self):
+            raise OSError("board unplugged")
+
+        def close(self):
+            pass
+
+    connection = SerialLink(Broken())
+    connection.start()
+    try:
+        assert wait_for(lambda: connection.dead)
+    finally:
+        connection.close()
+
+
+def test_dead_after_close():
+    connection = SerialLink(FakeBoard())
+    connection.start()
+    assert not connection.dead
+    connection.close()
+    assert connection.dead
+
+
+def test_request_raises_immediately_when_dead():
+    connection = SerialLink(FakeBoard())
+    connection.start()
+    connection.close()
+    with pytest.raises(LinkError, match="link is down"):
+        connection.request(protocol.cmd_ping())

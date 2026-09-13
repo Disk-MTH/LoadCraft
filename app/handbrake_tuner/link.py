@@ -92,6 +92,14 @@ class SerialLink:
         with self._lock:
             return self._last_error
 
+    @property
+    def dead(self) -> bool:
+        """Le thread de lecture est mort : le transport a échoué (carte
+        débranchée) ou la liaison a été fermée. Elle est inutilisable ; le
+        manager de liaison (manager.py) s'occupe du nettoyage."""
+        thread = self._thread
+        return thread is None or not thread.is_alive()
+
     # --- Envoi -------------------------------------------------------------
 
     def send(self, command: str) -> None:
@@ -106,6 +114,9 @@ class SerialLink:
         Les réponses en attente sont vidées avant l'envoi : sinon la réponse
         d'une commande précédente arrivée en retard serait prise pour celle-ci.
         """
+        if self.dead:
+            raise LinkError("link is down")
+
         while True:
             try:
                 self._replies.get_nowait()
@@ -214,6 +225,8 @@ def _describe(port) -> dict:
         "description": label,
         "hwid": port.hwid or "",
         "usb": port.vid is not None,
+        "vid": port.vid,
+        "pid": port.pid,
     }
 
 
