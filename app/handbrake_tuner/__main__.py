@@ -1,8 +1,8 @@
-"""Point d'entrée : lance le serveur local et ouvre l'interface.
+"""Entry point: starts the local server and opens the interface.
 
-La fenêtre native passe par pywebview, qui réutilise le moteur web du système
-(WebKitGTK sous Linux, WebView2 sous Windows). Si pywebview est absent, l'app
-bascule sur le navigateur par défaut plutôt que de refuser de démarrer.
+The native window goes through pywebview, which reuses the system web engine
+(WebKitGTK on Linux, WebView2 on Windows). When pywebview is missing, the app
+falls back to the default browser instead of refusing to start.
 """
 
 from __future__ import annotations
@@ -13,18 +13,20 @@ import sys
 import threading
 import webbrowser
 
+from .link import connect as connect_board
+from .link import list_ports
+from .manager import LinkManager
 from .server import create_app
 
-WINDOW_TITLE = "Calibration du handbrake"
+WINDOW_TITLE = "Handbrake calibration"
 WINDOW_SIZE = (1024, 720)
 
 
 def _free_port() -> int:
-    """Réserve un port libre attribué par le système.
+    """Reserves a system-assigned free port.
 
-    Un port fixe entrerait en conflit avec une autre instance ou un autre
-    service ; laisser le système choisir évite d'avoir à en trouver un
-    « probablement libre ».
+    A fixed port would clash with another instance or service; letting the
+    system pick avoids hunting for a "probably free" one.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -32,37 +34,39 @@ def _free_port() -> int:
 
 
 def _serve(app, port: int) -> None:
-    # threaded : le flux SSE occupe une connexion en continu, un serveur
-    # mono-thread ne répondrait plus à rien d'autre pendant ce temps.
+    # threaded: the SSE stream holds a connection for its whole life; a
+    # single-threaded server would stop answering anything else meanwhile.
     app.run(host="127.0.0.1", port=port, threaded=True, debug=False)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="handbrake-tuner",
-        description="Calibration du handbrake de simracing.",
+        description="Calibration app for the simracing handbrake.",
     )
     parser.add_argument(
-        "--port", type=int, default=0, help="port HTTP local (0 = automatique)"
+        "--port", type=int, default=0, help="local HTTP port (0 = automatic)"
     )
     parser.add_argument(
         "--browser",
         action="store_true",
-        help="ouvrir dans le navigateur au lieu d'une fenêtre native",
+        help="open in the browser instead of a native window",
     )
     parser.add_argument(
         "--no-window",
         action="store_true",
-        help="démarrer le serveur seul, sans ouvrir d'interface",
+        help="start the server alone, without opening an interface",
     )
     args = parser.parse_args(argv)
 
     port = args.port or _free_port()
-    app = create_app()
+    manager = LinkManager(list_ports_fn=list_ports, connect_fn=connect_board)
+    app = create_app(manager)
     url = f"http://127.0.0.1:{port}/"
+    manager.start()
 
     if args.no_window:
-        print(f"Interface disponible sur {url}")
+        print(f"Interface available at {url}")
         _serve(app, port)
         return 0
 
@@ -81,13 +85,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except ImportError:
             print(
-                "pywebview absent, ouverture dans le navigateur "
-                "(pip install 'handbrake-tuner[desktop]' pour une fenêtre "
-                "native).",
+                "pywebview missing, opening in the browser "
+                "(pip install 'handbrake-tuner[desktop]' for a native window).",
                 file=sys.stderr,
             )
 
-    print(f"Interface disponible sur {url}")
+    print(f"Interface available at {url}")
     webbrowser.open(url)
     try:
         server.join()

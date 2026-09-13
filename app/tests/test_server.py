@@ -1,4 +1,8 @@
-"""Tests de l'API HTTP, contre une carte simulée."""
+"""Tests of the HTTP API, against a simulated board.
+
+The link manager is driven deterministically through run_once and the fake
+`clock` fixture (conftest.py): no thread, no sleep.
+"""
 
 from __future__ import annotations
 
@@ -7,140 +11,108 @@ import time
 import pytest
 
 from handbrake_tuner.link import LinkError, SerialLink
-from handbrake_tuner.server import TunerState, create_app
+from handbrake_tuner.manager import LinkManager
+from handbrake_tuner.server import create_app
 
 from fake_board import FakeBoard
 
 
+def wait_for(predicate, timeout: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
 @pytest.fixture
-def wired():
-    """App + carte simulée, non connectée au départ."""
-    board = FakeBoard()
-    state = TunerState()
-    opened = []
+def wired(available):
+    """App + link manager + fake board, not connected at first."""
+    holder = {"board": FakeBoard()}
 
     def connect_fn(port: str) -> SerialLink:
         if port == "/dev/absent":
-            raise LinkError("ouverture de /dev/absent impossible")
-        connection = SerialLink(board, port=port)
+            raise LinkError(f"cannot open {port}")
+        connection = SerialLink(holder["board"], port=port)
         connection.start()
         connection.request_config("GET")
-        opened.append(connection)
         return connection
 
-    def list_ports_fn():
-        return [{"device": "/dev/fake0", "description": "Pro Micro", "hwid": "x"}]
-
-    app = create_app(state=state, connect_fn=connect_fn, list_ports_fn=list_ports_fn)
+    manager = LinkManager(
+        list_ports_fn=lambda: available,
+        connect_fn=connect_fn,
+        scan_interval=2.0,
+        poll_interval=0.5,
+    )
+    app = create_app(manager)
     app.config["TESTING"] = True
 
     with app.test_client() as client:
-        yield client, board, state
+        yield client, manager, holder, available
 
-    state.detach()
-    for connection in opened:
-        connection.close()
+    manager.stop()
 
 
 @pytest.fixture
-def connected(wired):
-    client, board, state = wired
-    response = client.post("/api/connect", json={"port": "/dev/fake0"})
-    assert response.status_code == 200
-    return client, board, state
+def connected(wired, clock):
+    """The manager has already connected to the fake board."""
+    client, manager, holder, available = wired
+    manager.run_once(clock())
+    assert client.get("/api/status").json["connected"] is True
+    return client, manager, holder, available
 
 
 # --- Interface -------------------------------------------------------------
 
 
-def test_page_servie(wired):
-    client, _, _ = wired
+def test_page_served(wired):
+    client, *_ = wired
     response = client.get("/")
     assert response.status_code == 200
-    assert b"Calibration du handbrake" in response.data
+    assert b"<!DOCTYPE html>" in response.data
 
 
-# --- Connexion -------------------------------------------------------------
+# --- Status ----------------------------------------------------------------
 
 
-def test_liste_des_ports(wired):
-    client, _, _ = wired
-    response = client.get("/api/ports")
-    assert response.status_code == 200
-    assert response.json["ports"][0]["device"] == "/dev/fake0"
-
-
-def test_statut_hors_connexion(wired):
-    client, _, _ = wired
+def test_status_searching_without_board(wired, clock):
+    client, manager, _, available = wired
+    available.clear()
+    manager.run_once(clock())
     body = client.get("/api/status").json
     assert body["connected"] is False
+    assert body["state"] == "searching"
     assert body["config"] is None
 
 
-def test_connexion(wired):
-    client, board, _ = wired
-    body = client.post("/api/connect", json={"port": "/dev/fake0"}).json
+def test_status_connected(connected):
+    client, _, _, _ = connected
+    body = client.get("/api/status").json
     assert body["connected"] is True
+    assert body["state"] == "connected"
     assert body["port"] == "/dev/fake0"
-    assert body["config"]["raw_min"] == board.raw_min
+    assert body["config"]["raw_min"] == 100000
 
 
-def test_connexion_sans_port(wired):
-    client, _, _ = wired
-    response = client.post("/api/connect", json={})
-    assert response.status_code == 400
-    assert "port" in response.json["error"]
+# --- Manual connection endpoints are gone -----------------------------------
 
 
-def test_connexion_impossible(wired):
-    client, _, _ = wired
-    response = client.post("/api/connect", json={"port": "/dev/absent"})
-    assert response.status_code == 502
-    assert "impossible" in response.json["error"]
+@pytest.mark.parametrize("path", ["/api/ports", "/api/connect", "/api/disconnect"])
+def test_manual_connection_endpoints_removed(wired, path):
+    client, *_ = wired
+    assert client.get(path).status_code == 404
+    assert client.post(path).status_code == 404
 
 
-def test_deconnexion(connected):
-    client, board, _ = connected
-    body = client.post("/api/disconnect").json
-    assert body["connected"] is False
-    assert "STREAM 0" in board.received
-
-
-def test_deconnexion_hors_connexion(wired):
-    """Se déconnecter sans être connecté doit aboutir sans erreur, sinon
-    l'app peut rester bloquée sur un port mort."""
-    client, _, _ = wired
-    assert client.post("/api/disconnect").status_code == 200
-
-
-def test_attacher_remplace_et_ferme_la_precedente():
-    """Une liaison remplacée doit être fermée, sinon son thread de lecture
-    continue de tourner et garde le port ouvert."""
-    state = TunerState()
-    first = SerialLink(FakeBoard(), port="/dev/fake0")
-    second = SerialLink(FakeBoard(), port="/dev/fake1")
-    first.start()
-    second.start()
-
-    state.attach(first)
-    state.attach(second)
-    try:
-        assert state.link is second
-        assert first._thread is None  # fermée
-    finally:
-        state.detach()
-        first.close()
-        second.close()
-
-
-# --- Commandes hors connexion ---------------------------------------------
+# --- Commands when not connected --------------------------------------------
 
 
 @pytest.mark.parametrize(
     "method,path,payload",
     [
-        ("post", "/api/calibrate/min", {}),
-        ("post", "/api/calibrate/max", {}),
+        ("post", "/api/calibrate/min", {"value": 42}),
+        ("post", "/api/calibrate/max", {"value": 42}),
         ("post", "/api/curve", {"curve": "POWER"}),
         ("post", "/api/gamma", {"gamma": 2.0}),
         ("post", "/api/save", {}),
@@ -149,108 +121,106 @@ def test_attacher_remplace_et_ferme_la_precedente():
         ("get", "/api/stream", None),
     ],
 )
-def test_commandes_refusees_hors_connexion(wired, method, path, payload):
-    client, _, _ = wired
-    response = getattr(client, method)(path, json=payload) if payload is not None \
-        else getattr(client, method)(path)
+def test_commands_refused_when_not_connected(wired, method, path, payload):
+    client, *_ = wired
+    response = getattr(client, method)(path, json=payload) \
+        if payload is not None else getattr(client, method)(path)
     assert response.status_code == 409
-    assert response.json["error"] == "non connecté"
+    assert response.json["error"] == "not connected"
 
 
-# --- Calibration -----------------------------------------------------------
+# --- Calibration -------------------------------------------------------------
 
 
-def test_calibration_minimum(connected):
-    client, board, _ = connected
-    board.current_raw = 123456
-
-    body = client.post("/api/calibrate/min").json
-    assert body["config"]["raw_min"] == 123456
-    assert "SET MIN" in board.received
+def test_calibrate_requires_value(connected):
+    client, *_ = connected
+    response = client.post("/api/calibrate/min", json={})
+    assert response.status_code == 400
+    assert response.json["error"] == "value required"
 
 
-def test_calibration_maximum(connected):
-    client, board, _ = connected
-    board.current_raw = 888888
+def test_calibrate_min_explicit_value(connected):
+    client, _, holder, _ = connected
+    body = client.post("/api/calibrate/min", json={"value": 4242}).json
+    assert body["config"]["raw_min"] == 4242
+    assert "SET MIN 4242" in holder["board"].received
 
-    body = client.post("/api/calibrate/max").json
+
+def test_calibrate_max_explicit_value(connected):
+    client, _, holder, _ = connected
+    body = client.post("/api/calibrate/max", json={"value": 888888}).json
     assert body["config"]["raw_max"] == 888888
 
 
-def test_calibration_valeur_explicite(connected):
-    client, board, _ = connected
-    body = client.post("/api/calibrate/min", json={"value": 4242}).json
-    assert body["config"]["raw_min"] == 4242
-    assert "SET MIN 4242" in board.received
+def test_calibrate_invalid_value(connected):
+    client, *_ = connected
+    assert client.post(
+        "/api/calibrate/min", json={"value": "much"}
+    ).status_code == 400
 
 
-def test_calibration_valeur_invalide(connected):
-    client, _, _ = connected
-    response = client.post("/api/calibrate/min", json={"value": "beaucoup"})
-    assert response.status_code == 400
+def test_calibrate_unknown_bound(connected):
+    client, *_ = connected
+    assert client.post(
+        "/api/calibrate/mid", json={"value": 1}
+    ).status_code == 400
 
 
-def test_calibration_borne_inconnue(connected):
-    client, _, _ = connected
-    assert client.post("/api/calibrate/milieu").status_code == 400
+# --- Curve -------------------------------------------------------------------
 
 
-# --- Courbe ----------------------------------------------------------------
-
-
-def test_changement_de_courbe(connected):
-    client, board, _ = connected
+def test_curve_change(connected):
+    client, *_ = connected
     body = client.post("/api/curve", json={"curve": "SCURVE", "gamma": 1.8}).json
     assert body["config"]["curve"] == "SCURVE"
     assert body["config"]["gamma"] == pytest.approx(1.8)
 
 
-def test_courbe_insensible_a_la_casse(connected):
-    client, _, _ = connected
+def test_curve_case_insensitive(connected):
+    client, *_ = connected
     body = client.post("/api/curve", json={"curve": "power"}).json
     assert body["config"]["curve"] == "POWER"
 
 
-def test_courbe_inconnue_refusee(connected):
-    client, _, _ = connected
-    response = client.post("/api/curve", json={"curve": "PARABOLE"})
-    assert response.status_code == 400
+def test_unknown_curve_refused(connected):
+    client, *_ = connected
+    assert client.post("/api/curve", json={"curve": "PARABOLE"}).status_code == 400
 
 
 def test_gamma(connected):
-    client, _, _ = connected
+    client, *_ = connected
     body = client.post("/api/gamma", json={"gamma": 2.5}).json
     assert body["config"]["gamma"] == pytest.approx(2.5)
 
 
-def test_gamma_borne_avant_envoi(connected):
-    """Le firmware borne déjà, mais borner ici évite d'envoyer une valeur que
-    la carte va corriger en silence — l'app afficherait autre chose que ce
-    qui s'applique."""
-    client, board, _ = connected
+def test_gamma_clamped_before_sending(connected):
+    """The firmware already clamps, but clamping here avoids sending a value
+    the board would fix silently — the app would display something else than
+    what actually applies."""
+    client, *_ = connected
     body = client.post("/api/gamma", json={"gamma": 999}).json
     assert body["config"]["gamma"] == pytest.approx(5.0)
 
 
-def test_gamma_invalide(connected):
-    client, _, _ = connected
-    assert client.post("/api/gamma", json={"gamma": "beaucoup"}).status_code == 400
+def test_gamma_invalid(connected):
+    client, *_ = connected
+    assert client.post("/api/gamma", json={"gamma": "much"}).status_code == 400
     assert client.post("/api/gamma", json={}).status_code == 400
 
 
-# --- Persistance -----------------------------------------------------------
+# --- Persistence --------------------------------------------------------------
 
 
-def test_sauvegarde(connected):
-    client, board, _ = connected
+def test_save(connected):
+    client, _, holder, _ = connected
     client.post("/api/calibrate/min", json={"value": 1111})
     assert client.post("/api/save").status_code == 200
-    assert board.saved is not None
-    assert board.saved[0] == 1111
+    assert holder["board"].saved is not None
+    assert holder["board"].saved[0] == 1111
 
 
-def test_rechargement_annule_les_modifications_non_sauvees(connected):
-    client, board, _ = connected
+def test_load_cancels_unsaved_changes(connected):
+    client, _, holder, _ = connected
     client.post("/api/calibrate/min", json={"value": 1111})
     client.post("/api/save")
 
@@ -259,22 +229,21 @@ def test_rechargement_annule_les_modifications_non_sauvees(connected):
     assert body["config"]["raw_min"] == 1111
 
 
-def test_reinitialisation(connected):
-    client, _, _ = connected
+def test_reset(connected):
+    client, *_ = connected
     body = client.post("/api/reset").json
     assert body["config"]["calibrated"] is False
     assert body["config"]["curve"] == "LINEAR"
 
 
-# --- Aperçu de courbe ------------------------------------------------------
+# --- Curve preview -------------------------------------------------------------
 
 
-def test_apercu_de_courbe(wired):
-    """L'aperçu ne dépend pas de la carte : on doit pouvoir comparer les
-    courbes avant même de brancher quoi que ce soit."""
-    client, _, _ = wired
+def test_curve_preview(connected):
+    """The preview does not depend on the board: curves can be compared
+    before anything is connected."""
+    client, *_ = connected
     body = client.get("/api/curve/preview?curve=POWER&gamma=2.0").json
-
     assert body["curve"] == "POWER"
     assert body["gamma"] == pytest.approx(2.0)
     assert body["points"][0] == [0.0, 0.0]
@@ -282,27 +251,30 @@ def test_apercu_de_courbe(wired):
     assert any(point[1] < point[0] - 1e-6 for point in body["points"])
 
 
-def test_apercu_gamma_borne(wired):
-    client, _, _ = wired
+def test_preview_gamma_clamped(connected):
+    client, *_ = connected
     body = client.get("/api/curve/preview?curve=POWER&gamma=999").json
     assert body["gamma"] == pytest.approx(5.0)
 
 
-def test_apercu_courbe_inconnue(wired):
-    client, _, _ = wired
+def test_preview_unknown_curve(connected):
+    client, *_ = connected
     assert client.get("/api/curve/preview?curve=PARABOLE").status_code == 400
 
 
-def test_apercu_gamma_invalide(wired):
-    client, _, _ = wired
-    assert client.get("/api/curve/preview?curve=POWER&gamma=beaucoup").status_code == 400
+def test_preview_invalid_gamma(connected):
+    client, *_ = connected
+    assert client.get(
+        "/api/curve/preview?curve=POWER&gamma=much"
+    ).status_code == 400
 
 
-# --- Flux temps réel -------------------------------------------------------
+# --- Live stream ----------------------------------------------------------------
 
 
-def test_flux_sse(connected):
-    client, board, _ = connected
+def test_stream_sse(connected):
+    client, _, holder, _ = connected
+    board = holder["board"]
 
     response = client.get("/api/stream")
     assert response.status_code == 200
@@ -320,3 +292,34 @@ def test_flux_sse(connected):
     response.close()
 
     assert "654321" in payload
+
+
+def test_stream_ends_when_the_link_is_replaced(connected, clock):
+    """When the board is unplugged and a fresh one takes its port, the old
+    stream must end: the browser's EventSource then re-subscribes to the new
+    link on its own."""
+    client, manager, holder, _ = connected
+    board = holder["board"]
+
+    response = client.get("/api/stream")
+    stream = response.response
+    board.emit_telemetry(111111)
+
+    # The first chunk can be a keep-alive comment: consume chunks until the
+    # telemetry event arrives.
+    first = ""
+    deadline = time.monotonic() + 3.0
+    while "111111" not in first and time.monotonic() < deadline:
+        first += next(stream).decode("utf-8")
+    assert "111111" in first
+
+    board.close()
+    assert wait_for(lambda: manager.link is not None and manager.link.dead)
+    manager.run_once(clock())      # the dead link is dropped
+    holder["board"] = FakeBoard()  # a fresh device on the same port
+    manager.run_once(clock(2.0))   # the scan cadence has elapsed: reconnect
+    assert manager.status()["connected"] is True
+
+    with pytest.raises(StopIteration):
+        next(stream)
+    response.close()
