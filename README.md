@@ -1,148 +1,150 @@
-# Handbrake progressif pour simracing
+# Progressive handbrake for simracing
 
-Handbrake à cellule de charge, vu par le PC comme un **périphérique USB HID
-natif** : aucun driver, aucun logiciel à laisser tourner pendant le jeu. Il
-apparaît dans « Contrôleurs de jeu USB » de Windows comme un handbrake du
-commerce, et se mappe comme n'importe quel axe.
+Load-cell handbrake, seen by the PC as a **native USB HID device**: no
+driver, no software to keep running during gameplay. It appears in
+Windows "Game Controllers" like a store-bought handbrake, and can be
+mapped like any other axis.
 
 ```
-Cellule 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> PC
-                                                      │
-                                    joystick HID (jeu) + série (calibration)
+Load cell 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> PC
+                                                           │
+                                  joystick HID (game) + serial (calibration)
 ```
 
-## État
+## Status
 
-| Partie | État |
+| Part | Status |
 |---|---|
-| Cœur du firmware (courbes, filtre, protocole, EEPROM) | ✅ 3425 assertions natives |
-| Couche matérielle + sketch | ✅ compile, 62 % flash / 26 % RAM |
-| App de calibration | ✅ 113 tests |
-| **Carte flashée et reconnue** | ✅ un axe `ABS_X`, sur `/dev/input/js2` |
-| **Protocole série sur matériel réel** | ✅ PING/GET/STREAM/SET/RESET vérifiés |
-| Lecture de la cellule | ⏳ HX711 pas encore câblé |
-| Essai en jeu | ⏳ |
+| Firmware core (curves, filter, protocol, EEPROM) | ✅ 3425 native assertions |
+| Hardware layer + sketch | ✅ compiles, 62% flash / 26% RAM |
+| Calibration app | ✅ 113 tests |
+| **Flashed and recognized board** | ✅ one `ABS_X` axis, on `/dev/input/js2` |
+| **Serial protocol on real hardware** | ✅ PING/GET/STREAM/SET/RESET verified |
+| Load cell reading | ⏳ HX711 not wired yet |
+| In-game test | ⏳ |
 
-La carte fonctionne et dialogue. Ce qui reste à valider tient au capteur
-lui-même : bruit réel du HX711, plage utile, tenue mécanique, et le ressenti
-en jeu qui décidera de la courbe. Détail dans `docs/design.md` §9.
+The board works and talks. What remains to be validated comes down to the
+sensor itself: real HX711 noise, useful range, mechanical durability, and
+the in-game feel that will decide the curve. Details in `docs/design.md` §9.
 
-## Matériel
+## Hardware
 
-| Élément | Précision |
+| Part | Detail |
 |---|---|
-| Cellule de charge 20 kg | 4 fils, avec module HX711 |
-| Module HX711 | Amplificateur + convertisseur 24 bits |
+| 20 kg load cell | 4 wires, with HX711 module |
+| HX711 module | Amplifier + 24-bit converter |
 | **Pro Micro ATmega32u4** | 5 V / 16 MHz, USB-C |
 
-⚠️ **Une carte ESP8266 ou à puce CH340 ne convient pas.** Leur port USB est
-relié à un pont USB↔série à fonction fixe, incapable de se présenter comme un
-joystick. Il faut un micro-contrôleur dont le contrôleur USB est dans la puce
-principale. Détails dans `docs/design.md` §1.
+⚠️ **An ESP8266 board, or one with a CH340 chip, is not suitable.** Their
+USB port is tied to a fixed-function USB-to-serial bridge, incapable of
+presenting itself as a joystick. You need a microcontroller whose USB
+controller is in the main chip. Details in `docs/design.md` §1.
 
-Câblage complet : `docs/wiring.md`.
+Full wiring: `docs/wiring.md`.
 
 ## Structure
 
 ```
 firmware/handbrake/   firmware ATmega32u4
-  hb_core.c           courbes, normalisation, filtre        ← C99 pur, testé
-  hb_protocol.c       protocole série                       ← C99 pur, testé
-  hb_record.c         sérialisation EEPROM + CRC            ← C99 pur, testé
-  hx711.cpp           driver capteur                        ← matériel
-  hb_storage.cpp      accès EEPROM                          ← matériel
-  handbrake.ino       boucle principale, HID                ← matériel
-app/                  app de calibration (Python)
-tests/                tests natifs du cœur du firmware (gcc)
-docs/                 conception et câblage
+  hb_core.c           curves, normalization, filter         ← pure C99, tested
+  hb_protocol.c       serial protocol                       ← pure C99, tested
+  hb_record.c         EEPROM serialization + CRC            ← pure C99, tested
+  hx711.cpp           sensor driver                         ← hardware
+  hb_storage.cpp      EEPROM access                         ← hardware
+  handbrake.ino       main loop, HID                        ← hardware
+app/                  calibration app (Python)
+tests/                native tests of the firmware core (gcc)
+docs/                 design and wiring
 ```
 
-Le firmware est séparé en **cœur pur** et **couche matérielle** : toute la
-logique susceptible d'être fausse est en C99 sans dépendance Arduino, donc
-compilée et testée sur PC en une seconde. Ce qui reste dans la couche
-matérielle ne peut de toute façon être validé qu'avec la carte branchée.
+The firmware is split into a **pure core** and a **hardware layer**: all
+the logic that could be wrong is in C99 with no Arduino dependency, so it
+is compiled and tested on the PC in a second. What remains in the hardware
+layer can only be validated with the board plugged in anyway.
 
 ## Tests
 
 ```bash
-make test            # les deux suites
-make test-firmware   # cœur du firmware, natif (gcc)
-make test-app        # app de calibration (pytest)
+make test            # both suites
+make test-firmware   # firmware core, native (gcc)
+make test-app        # calibration app (pytest)
 ```
 
-Aucune des deux suites n'a besoin de la carte.
+Neither suite needs the board.
 
-## Compiler et téléverser le firmware
+## Building and flashing the firmware
 
-### Dépendance : la bibliothèque Joystick
+### Dependency: the Joystick library
 
-⚠️ **Elle n'est pas dans le gestionnaire de bibliothèques Arduino.** Une autre
-bibliothèque nommée « Joystick » (Giuseppe Martini) y figure — elle sert à
-*lire* un module joystick analogique, pas à en émuler un. L'installer conduit
-à une erreur `'Joystick_' does not name a type`.
+⚠️ **It is not in the Arduino library manager.** Another library named
+"Joystick" (Giuseppe Martini) is listed there; it is for *reading* an
+analog joystick module, not for emulating one. Installing it leads to the
+error `'Joystick_' does not name a type`.
 
-Il faut celle de **MHeironimus**, installée depuis GitHub :
+You need the one by **MHeironimus**, installed from GitHub:
 
 ```bash
-# Avec arduino-cli
+# With arduino-cli
 ARDUINO_LIBRARY_ENABLE_UNSAFE_INSTALL=true \
   arduino-cli lib install --git-url https://github.com/MHeironimus/ArduinoJoystickLibrary.git
 
-# Avec l'IDE Arduino : télécharger le .zip du dépôt, puis
-# Croquis > Inclure une bibliothèque > Ajouter la bibliothèque .ZIP
+# With the Arduino IDE: download the .zip of the repo, then
+# Sketch > Include a library > Add .ZIP library
 ```
 
 ### Compilation
 
 ```bash
-make detect                      # identifie la carte et son FQBN
-make build                       # arduino:avr:leonardo par défaut
-make flash PORT=/dev/ttyACM0     # téléversement
+make detect                      # identifies the board and its FQBN
+make build                       # arduino:avr:leonardo by default
+make flash PORT=/dev/ttyACM0     # upload
 ```
 
-Occupation constatée : 17896 octets de flash (62 %), 687 octets de RAM (26 %).
+Observed usage: 17896 bytes of flash (62%), 687 bytes of RAM (26%).
 
-**Le FQBN dépend du bootloader du clone.** Beaucoup de Pro Micro embarquent le
-bootloader Leonardo et s'annoncent `2341:8036`. D'autres se présentent en
-Arduino Micro (`2341:8037`) ou en SparkFun Pro Micro (`1B4F:…`). `make detect`
-donne le bon ; pour en utiliser un autre :
+**The FQBN depends on the clone's bootloader.** Many Pro Micros ship with
+the Leonardo bootloader and identify as `2341:8036`. Others present as
+Arduino Micro (`2341:8037`) or SparkFun Pro Micro (`1B4F:...`). `make
+detect` gives the right one; to use another one:
 
 ```bash
 make build FQBN=arduino:avr:micro
 ```
 
-Sous l'IDE Arduino, choisir la carte correspondante (**Arduino Leonardo** ou
-**Arduino Micro** — même ATmega32u4) et ouvrir
+Under the Arduino IDE, choose the matching board (**Arduino Leonardo** or
+**Arduino Micro**, same ATmega32u4) and open
 `firmware/handbrake/handbrake.ino`.
 
-### Si le téléversement échoue
+### If the upload fails
 
-Le 32u4 doit passer en bootloader pour être flashé. Normalement l'outil s'en
-charge en ouvrant le port à 1200 bauds, mais un sketch qui plante la pile USB
-empêche ce mécanisme. Solution manuelle : **double appui rapide sur RESET**,
-puis lancer le téléversement dans les ~8 secondes où le bootloader est actif.
+The 32u4 must switch to bootloader mode to be flashed. Normally the tool
+takes care of it by opening the port at 1200 bauds, but a sketch that
+crashes the USB stack prevents this mechanism. Manual solution: **quick
+double press of RESET**, then start the upload within the ~8 seconds where
+the bootloader is active.
 
-## Prérequis par système
+## Prerequisites per system
 
 ### Linux
 
-L'accès au port série passe par le groupe `dialout` :
+Access to the serial port goes through the `dialout` group:
 
 ```bash
-sudo usermod -aG dialout $USER   # puis déconnexion/reconnexion de session
+sudo usermod -aG dialout $USER   # then log out and back in
 ```
 
-Sans ça, `/dev/ttyACM0` reste en `root:dialout` et l'app comme le
-téléversement échouent sur un refus de permission.
+Without this, `/dev/ttyACM0` stays as `root:dialout` and both the app and
+the upload fail with permission denied.
 
 ### Windows
 
-Rien à installer : Windows 10/11 fournit le pilote CDC pour l'ATmega32u4 à
-identifiants Arduino, et le périphérique HID est reconnu nativement.
+Nothing to install: Windows 10/11 provides the CDC driver for the
+ATmega32u4 with Arduino identifiers, and the HID device is recognized
+natively.
 
-Le port est un `COM…` au lieu de `/dev/ttyACM0` — l'app le détecte de la même
-façon. Le `Makefile` suppose un environnement Unix ; sous Windows, lancer les
-commandes directement :
+The port is a `COM...` instead of `/dev/ttyACM0`; the app detects it the
+same way. The `Makefile` assumes a Unix environment; on Windows, run the
+commands directly:
 
 ```
 cd app
@@ -152,120 +154,127 @@ uv pip install --python .venv -e ".[dev]"
 .venv\Scripts\python -m handbrake_tuner
 ```
 
-Le firmware est strictement identique sur les deux systèmes : la calibration
-sauvegardée sous Linux reste valable une fois la carte branchée sur le PC de
-jeu, puisqu'elle vit dans l'EEPROM de la carte et non sur le PC.
+The firmware is strictly identical on both systems: a calibration saved
+under Linux remains valid once the board is plugged into the gaming PC,
+since it lives in the board's EEPROM and not on the PC.
 
-## Vérifier que l'axe est bien vu par le système
+## Verifying that the axis is seen by the system
 
 ### Linux
 
 ```bash
 sudo dnf install evtest joystick   # Fedora
-jstest /dev/input/js0              # l'axe doit bouger quand on tire
+jstest /dev/input/js0              # the axis must move when you pull
 ```
 
 ### Windows
 
-`Win+R` → `joy.cpl` → sélectionner le périphérique → **Propriétés**. L'axe X
-doit se déplacer quand on tire sur le levier.
+`Win+R` → `joy.cpl` → select the device → **Properties**. The X axis must
+move when you pull the lever.
 
-Une fois visible ici, n'importe quel jeu peut le mapper comme handbrake.
+Once visible here, any game can map it as a handbrake.
 
-## App de calibration
+## Calibration app
 
 ```bash
 make setup-app
 app/.venv/bin/python -m handbrake_tuner
 ```
 
-Options : `--browser` (ouvrir dans le navigateur), `--no-window` (serveur
-seul), `--port N` (port HTTP fixe). Le serveur n'écoute que sur `127.0.0.1`.
+Options: `--browser` (open in the browser), `--no-window` (server only),
+`--port N` (fixed HTTP port). The server only listens on `127.0.0.1`.
 
-`make setup-app` installe `pywebview`, qui affiche l'interface dans une
-fenêtre native. S'il est absent, l'app bascule sur le navigateur par défaut
-au lieu de refuser de démarrer — pratique en dépannage, mais c'est aussi ce
-qui se produit si l'installation de la fenêtre native a échoué sans qu'on
-l'ait remarqué.
+`make setup-app` installs `pywebview`, which displays the interface in a
+native window. If it is absent, the app falls back to the default browser
+instead of refusing to start: handy for troubleshooting, but that is also
+what happens if the native window installation failed without you
+noticing.
 
-Sous **Linux**, cette fenêtre s'appuie sur WebKitGTK via PyGObject. PyGObject
-ne s'installe pas proprement par pip sans chaîne de compilation complète,
-alors que la bibliothèque système est presque toujours déjà présente : c'est
-pourquoi l'environnement virtuel est créé avec `--system-site-packages`. Si la
-fenêtre native ne s'ouvre pas malgré tout :
+Under **Linux**, this window relies on WebKitGTK via PyGObject. PyGObject
+does not install cleanly via pip without a full build toolchain, while the
+system library is almost always already present: that is why the virtual
+environment is created with `--system-site-packages`. If the native window
+does not open anyway:
 
 ```bash
 sudo dnf install python3-gobject webkit2gtk4.1   # Fedora
-python3 -c "import gi; gi.require_version('Gtk','3.0')"  # doit passer
+python3 -c "import gi; gi.require_version('Gtk','3.0')"  # must pass
 ```
 
-Sous **Windows**, rien à faire : pywebview y utilise WebView2, fourni avec
-Edge.
+Under **Windows**, nothing to do: pywebview uses WebView2 there, which
+ships with Edge.
 
-### Procédure de calibration
+### Calibration procedure
 
-1. Brancher la carte, sélectionner le port, **Connecter**.
-2. Levier au repos → **Définir ici** sur la ligne *Minimum*.
-3. Tirer à la force qui doit correspondre au frein à fond → **Définir ici**
-   sur la ligne *Maximum*.
-4. Essayer les courbes et le curseur gamma jusqu'à trouver le bon ressenti.
-5. **Sauvegarder dans la carte**.
+1. Plug the board and start the app: the status panel shows
+   "Searching for the board..." until it connects (a few seconds). No
+   connect/disconnect buttons anymore.
+2. Lever at rest: type the raw value shown in the Measurement panel into
+   the **Minimum** field, then press Enter.
+3. Pull with the force that should mean full brake: type that raw value
+   into the **Maximum** field, then press Enter.
+4. Try the curves and the gamma slider until the feel is right.
+5. **Save to the board**.
 
-Sans l'étape 5, les réglages sont perdus au débranchement : l'EEPROM n'est
-écrite que sur demande, pour ne pas l'user à chaque mouvement du curseur.
+Without step 5, the settings are lost when the board is unplugged: the
+EEPROM is written on demand only, so it is not worn out by every slider
+move.
 
-### Courbes disponibles
+### Available curves
 
-| Courbe | Effet |
+| Curve | Effect |
 |---|---|
-| Linéaire | Sortie proportionnelle à la force |
-| Puissance | `gamma < 1` : mordant dès le début. `gamma > 1` : progressif, précision en début de course |
-| Courbe en S | `gamma > 1` : doux aux extrémités, franc au milieu. `gamma < 1` : l'inverse |
+| Linear | Output proportional to the force |
+| Power | `gamma < 1`: bite from the start. `gamma > 1`: progressive, precision at the start of the travel |
+| S curve | `gamma > 1`: soft at the ends, crisp in the middle. `gamma < 1`: the opposite |
 
-`gamma = 1` rend les trois identiques : c'est le repère neutre pour comparer.
+`gamma = 1` makes all three identical: it is the neutral reference for
+comparison.
 
-Le bon réglage dépend du ressenti et du montage mécanique — d'où le réglage en
-direct plutôt qu'une valeur figée dans le code.
+The right setting depends on the feel and the mechanical setup: hence live
+tuning rather than a value frozen in the code.
 
-## Protocole série
+## Serial protocol
 
-Utile pour déboguer sans l'app, depuis n'importe quel moniteur série :
+Useful for debugging without the app, from any serial monitor:
 
 ```
 PING                     → OK PING
-GET                      → CFG min=… max=… curve=… gamma=… calibrated=…
-SET MIN | SET MAX        capture la valeur filtrée courante
+GET                      → CFG min=... max=... curve=... gamma=... calibrated=...
+SET MIN | SET MAX        captures the current filtered value
 SET MIN <v> | SET MAX <v>
 SET CURVE LINEAR|POWER|SCURVE [gamma]
 SET GAMMA <f>
 SAVE | LOAD | RESET
-STREAM 0|1               télémétrie : T raw=… out=… axis=…
+STREAM 0|1               telemetry: T raw=... out=... axis=... s=1|0
 ```
 
-La télémétrie est coupée par défaut. Détails dans `docs/design.md` §6.
+Telemetry is off by default. s=0 when there is no valid sample (stuck
+sensor or sensor absent); older boards omit the field. Details in
+`docs/design.md` §6.
 
 ## VS Code
 
-La configuration partagée est versionnée dans `.vscode/`.
+The shared configuration is versioned in `.vscode/`.
 
-**Tâches** (`Ctrl+Shift+P` → *Run Task*) : lancer les tests (tout / firmware /
-app), compiler, détecter la carte, téléverser (demande le port), lancer l'app,
-installer l'environnement Python. `Ctrl+Shift+B` compile le firmware,
-`Ctrl+Shift+P` → *Run Test Task* lance toute la suite.
+**Tasks** (`Ctrl+Shift+P` → *Run Task*): run the tests (all / firmware /
+app), build, detect the board, upload (asks for the port), launch the app,
+install the Python environment. `Ctrl+Shift+B` builds the firmware,
+`Ctrl+Shift+P` → *Run Test Task* runs the full suite.
 
-**Débogage** (F5) : l'app en fenêtre native, en navigateur ou en serveur seul,
-les tests pytest (tous ou le fichier courant), et les trois exécutables de
-tests natifs sous gdb — le cœur du firmware étant du C99 ordinaire, il se
-débogue comme n'importe quel programme, avec points d'arrêt et inspection.
+**Debugging** (F5): the app in a native window, in the browser, or server
+only; the pytest tests (all or the current file); and the three native
+test executables under gdb: the firmware core being ordinary C99, it
+debugs like any other program, with breakpoints and inspection.
 
-**IntelliSense** : deux configurations C/C++ dans `c_cpp_properties.json`. La
-première, *Cœur firmware (natif)*, sert pour `hb_core`/`hb_protocol`/
-`hb_record` et les tests. La seconde, *Firmware AVR*, ajoute les en-têtes
-Arduino pour le `.ino` et les drivers. Basculer via la barre d'état en bas à
-droite. Les chemins suivent l'installation par défaut d'arduino-cli ; si vous
-mettez le core AVR à jour, ajustez le numéro de version.
+**IntelliSense**: two C/C++ configurations in `c_cpp_properties.json`.
+The first, *Firmware core (native)*, is for `hb_core`/`hb_protocol`/
+`hb_record` and the tests. The second, *Firmware AVR*, adds the Arduino
+headers for the `.ino` and the drivers. Switch via the status bar at the
+bottom right. The paths follow the default arduino-cli installation; if
+you update the AVR core, adjust the version number.
 
 ## Documentation
 
-- `docs/design.md` — conception, choix techniques et leurs raisons
-- `docs/wiring.md` — câblage, vérifications, première mise en route
+- `docs/design.md`: design, technical choices and their reasons
+- `docs/wiring.md`: wiring, checks, first startup
