@@ -48,9 +48,15 @@ class Telemetry:
     raw: int
     out: float
     axis: int
+    sensor: bool = True
 
     def as_dict(self) -> dict:
-        return {"raw": self.raw, "out": self.out, "axis": self.axis}
+        return {
+            "raw": self.raw,
+            "out": self.out,
+            "axis": self.axis,
+            "sensor": self.sensor,
+        }
 
 
 @dataclass(frozen=True)
@@ -116,6 +122,7 @@ def parse_line(line: str) -> Optional[Message]:
                 raw=int(fields["raw"]),
                 out=float(fields["out"]),
                 axis=int(fields["axis"]),
+                sensor=fields.get("s", "1") == "1",
             )
         except (KeyError, ValueError):
             return None

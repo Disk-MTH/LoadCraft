@@ -157,3 +157,17 @@ def test_normalize_plage_inversee():
 
 def test_normalize_plage_nulle():
     assert protocol.normalize(1000, 1000, 1000) == 0.0
+
+
+def test_parse_telemetry_with_sensor_flag():
+    message = protocol.parse_line("T raw=123456 out=0.750 axis=767 s=0")
+    assert message == Telemetry(
+        raw=123456, out=0.75, axis=767, sensor=False
+    )
+
+
+def test_parse_telemetry_sensor_defaults_to_present():
+    """The field is optional on the wire: a board that predates it still
+    parses, treated as having a valid sample."""
+    message = protocol.parse_line("T raw=123456 out=0.750 axis=767")
+    assert message.sensor is True
