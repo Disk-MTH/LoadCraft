@@ -13,7 +13,7 @@ import threading
 from typing import List, Optional
 
 from . import protocol
-from .protocol import Ack, Config, Err, Telemetry
+from .protocol import Config, Err, Telemetry
 
 # Baud rate ignored by a CDC port (the rate is the USB one), present by
 # convention and because pyserial requires a value.

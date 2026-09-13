@@ -285,7 +285,6 @@ const state = {
   status: null,     /* last /api/status payload */
   config: null,
   telemetry: null,
-  dirty: false,
   events: null,
 };
 
@@ -416,7 +415,6 @@ function renderTelemetry() {
 }
 
 function setDirty(value) {
-  state.dirty = value;
   el("dirty").textContent = value
     ? "Unsaved changes on the board."
     : "";

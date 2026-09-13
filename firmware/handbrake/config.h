@@ -45,9 +45,9 @@
 
 /* --- Storage ------------------------------------------------------------ */
 
+/* EEPROM address of the serialized record. The magic and the version live
+ * in hb_record.h, next to the layout they protect. */
 #define HB_EEPROM_ADDR    0
-#define HB_EEPROM_MAGIC   0x48424B31UL /* "HBK1" */
-#define HB_EEPROM_VERSION 1
 
 /* --- HID output --------------------------------------------------------- */
 
