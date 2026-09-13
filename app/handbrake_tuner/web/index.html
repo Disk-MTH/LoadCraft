@@ -282,6 +282,11 @@ const state = {
 const RAW_MIN = -8388608;
 const RAW_MAX = 8388607;
 
+/* gamma picked when a non-linear curve is selected at the neutral point:
+   gamma = 1 makes every curve linear, so start from a visible shape the
+   user can then refine. */
+const GAMMA_DEFAULT = 2.0;
+
 const GAMMA_NOTES = {
   LINEAR: "Output proportional to force. The neutral reference point.",
   POWER: "gamma < 1: biting from the start of the stroke. " +
@@ -549,10 +554,15 @@ function adoptConfig(data, message) {
 for (const button of document.querySelectorAll(".curve-tabs button")) {
   button.addEventListener("click", async () => {
     const curve = button.dataset.curve;
+    let gamma = parseFloat(el("gamma").value);
+    /* At the neutral point every curve is linear: pick a visible shape. */
+    if (curve !== "LINEAR" && gamma === 1.0) {
+      gamma = GAMMA_DEFAULT;
+    }
     adoptConfig(
       await guard(() => post("/api/curve", {
         curve,
-        gamma: parseFloat(el("gamma").value),
+        gamma,
       })),
       `Curve: ${button.textContent}.`
     );
