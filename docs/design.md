@@ -1,320 +1,357 @@
-# Handbrake progressif USB — conception
+# Progressive USB handbrake - design
 
-Handbrake de simracing à cellule de charge, vu par le PC comme un périphérique
-USB HID natif (aucun driver, aucun logiciel à laisser tourner pendant le jeu).
+Load-cell simracing handbrake, seen by the PC as a native USB HID device
+(no driver, no software to keep running during gameplay).
 
-## 1. Matériel
+## 1. Hardware
 
-| Élément | Référence | Rôle |
+| Part | Reference | Role |
 |---|---|---|
-| Cellule de charge | 20 kg, jauge de contrainte 4 fils | Mesure la force appliquée sur le levier |
-| Amplificateur / ADC | Module HX711 (24 bits) | Amplifie le pont de jauges et numérise |
-| Micro-contrôleur | Pro Micro ATmega32u4, 5 V / 16 MHz, USB-C | Traitement + énumération USB HID |
+| Load cell | 20 kg, 4-wire strain gauge | Measures the force applied to the lever |
+| Amplifier / ADC | HX711 module (24-bit) | Amplifies the gauge bridge and digitizes |
+| Microcontroller | Pro Micro ATmega32u4, 5 V / 16 MHz, USB-C | Processing + USB HID enumeration |
 
-### Pourquoi l'ATmega32u4 et pas un ESP8266
+### Why the ATmega32u4 and not an ESP8266
 
-L'ESP8266 (ESP-01, ESP-12F, NodeMCU…) n'a **aucun contrôleur USB device**. Le port
-micro-USB de ces cartes est relié à une puce pont USB↔série (CH340 / CP2102) à
-fonction fixe : elle ne peut s'annoncer que comme port COM, jamais comme joystick.
-L'ATmega32u4 embarque le contrôleur USB dans le silicium principal : c'est le
-firmware qui décide du type de périphérique présenté à l'hôte.
+The ESP8266 (ESP-01, ESP-12F, NodeMCU...) has **no USB device controller**.
+The micro-USB port of those boards is tied to a fixed-function USB-to-serial
+bridge chip (CH340 / CP2102): it can only announce itself as a COM port,
+never as a joystick. The ATmega32u4 has the USB controller built into the
+main silicon: it is the firmware that decides the type of device presented
+to the host.
 
-Même raison pour écarter les clones « Nano USB-C » à puce CH340, malgré leur
-description « compatible Pro Micro ».
+Same reason to rule out "Nano USB-C" clones with a CH340 chip, despite their
+"Pro Micro compatible" description.
 
-## 2. Architecture logicielle
+## 2. Software architecture
 
 ```
-Cellule 20kg ──4 fils──> HX711 ──DT/SCK──> Pro Micro (ATmega32u4)
+Load cell 20 kg ──4 wires──> HX711 ──DT/SCK──> Pro Micro (ATmega32u4)
                                                   │
                                     ┌─────────────┴─────────────┐
                                     │      firmware C/C++       │
-                                    │  1. lecture brute 24 bits │
-                                    │  2. filtre EMA            │
-                                    │  3. normalisation min/max │
-                                    │  4. courbe de réponse     │
-                                    │  5. axe 0..1023           │
+                                    │  1. raw 24-bit read       │
+                                    │  2. EMA filter            │
+                                    │  3. min/max normalization │
+                                    │  4. response curve        │
+                                    │  5. axis 0..1023          │
                                     └─────────────┬─────────────┘
                                                   │
                               ┌───────────────────┴───────────────────┐
-                              │        USB composite (natif)          │
-                              │  ├─ HID joystick : 1 axe X            │
-                              │  └─ CDC série    : protocole de config│
+                              │        USB composite (native)         │
+                              │  ├─ HID joystick : 1 X axis           │
+                              │  └─ CDC serial   : config protocol    │
                               └───────────────────┬───────────────────┘
                                     ┌─────────────┴─────────────┐
                                     │                           │
-                              Jeux (DirectInput)        App de calibration
-                                                        (Python, optionnelle)
+                              Games (DirectInput)        Calibration app
+                                                            (Python, optional)
 ```
 
-Le firmware est **autonome** : la configuration vit en EEPROM du 32u4, donc le
-handbrake fonctionne correctement branché sur n'importe quel PC, app fermée.
-L'app de calibration ne sert qu'à régler, pas à jouer.
+The firmware is **standalone**: the configuration lives in the 32u4's EEPROM,
+so the handbrake works correctly plugged into any PC, app closed. The
+calibration app is only for tuning, not for playing.
 
-## 3. Chaîne de traitement du signal
+## 3. Signal processing chain
 
 ### 3.1 Acquisition
 
-Driver HX711 maison, non bloquant (~40 lignes). Le protocole HX711 est trivial
-(24 bits en série synchrone + impulsions d'horloge pour choisir le gain), et une
-implémentation maison évite une dépendance externe tout en garantissant que la
-boucle principale ne se bloque jamais en attente de conversion — indispensable
-pour continuer à servir l'USB et les commandes série.
+Home-grown HX711 driver, non-blocking (~40 lines). The HX711 protocol is
+trivial (24 bits in synchronous serial + clock pulses to select the gain),
+and a home-grown implementation avoids an external dependency while
+guaranteeing that the main loop never blocks waiting for a conversion:
+mandatory to keep serving the USB and the serial commands.
 
-Canal A, gain 128 (25 impulsions d'horloge) : c'est l'entrée à faible bruit,
-adaptée à une cellule de charge.
+Channel A, gain 128 (25 clock pulses): the low-noise input, suited to a load
+cell.
 
-Broche `RATE` du module reliée à VCC → **80 échantillons/seconde** au lieu des
-10 par défaut. Sur un handbrake la latence compte : 12,5 ms au lieu de 100 ms.
+The module's `RATE` pin tied to VCC gives **80 samples per second** instead
+of the default 10. On a handbrake latency matters: 12.5 ms instead of
+100 ms.
 
-### 3.2 Filtrage
+### 3.2 Filtering
 
-Moyenne exponentielle (EMA) : `y[n] = y[n-1] + α·(x[n] − y[n-1])`.
+Exponential moving average (EMA): `y[n] = y[n-1] + α·(x[n] − y[n-1])`.
 
-Choisie plutôt qu'une moyenne glissante classique parce qu'elle ne coûte qu'une
-valeur en RAM et une multiplication, sans tampon circulaire. α = 0,5 à 80 SPS
-donne une constante de temps d'environ 12,5 ms (90 % d'un pas en ~42 ms) : le
-HX711 en gain 128 est très stable et l'axe n'est quantifié qu'à 1/1023, donc le
-bruit qui passe en plus reste imperceptible. Un coefficient plus bas (0,25)
-se sentait comme une latence au tirage comme au relâchement.
+Chosen over a classic sliding average because it costs only one RAM value
+and one multiplication, with no circular buffer. α = 0.5 at 80 SPS gives a
+time constant of about 12.5 ms (90 % of a step in ~42 ms): the HX711 at gain
+128 is very stable and the axis is only quantized to 1/1023, so the extra
+noise that gets through stays imperceptible. A lower coefficient (0.25) felt
+like a lag both on the pull and on the release.
 
-### 3.3 Normalisation
+### 3.3 Normalization
 
 ```
-t = (raw − raw_min) / (raw_max − raw_min)   puis borné à [0, 1]
+t = (raw − raw_min) / (raw_max − raw_min)   then clamped to [0, 1]
 ```
 
-`raw_min` = levier au repos, `raw_max` = force maximale voulue à fond. Les deux
-sont capturées par l'utilisateur depuis l'app, au ressenti.
+`raw_min` = lever at rest, `raw_max` = the maximum force wanted at full pull.
+Both are captured by the user from the app, by feel.
 
-Cette formule gère **aussi le cas `raw_max < raw_min`** : si la cellule est
-câblée en polarité inverse (A+ et A− permutés), il suffit de calibrer
-normalement, le signe s'annule de lui-même. Aucune option « inverser l'axe »
-n'est donc nécessaire. Seul cas dégénéré : `raw_min == raw_max`, qui renvoie 0.
+This formula also handles **the `raw_max < raw_min` case**: if the cell is
+wired with reversed polarity (A+ and A− swapped), just calibrate normally,
+the sign cancels out by itself. No "invert axis" option is therefore needed.
+Only degenerate case: `raw_min == raw_max`, which returns 0.
 
-### 3.4 Courbe de réponse
+### 3.4 Response curve
 
-`raw_min`/`raw_max` fixent la *plage*, la courbe fixe le *ressenti* à
-l'intérieur. Trois formes, un seul paramètre `gamma` :
+`raw_min`/`raw_max` set the *range*, the curve sets the *feel* inside it.
+Three shapes, one parameter `gamma`:
 
-| Courbe | Formule | Effet |
+| Curve | Formula | Effect |
 |---|---|---|
-| `LINEAR` | `t` | Sortie proportionnelle à la force |
-| `POWER` | `t^gamma` | `gamma < 1` : mordant dès le début. `gamma > 1` : progressif, précision en début de course |
-| `SCURVE` | `t<0,5 : ½(2t)^g`<br>`t≥0,5 : 1−½(2(1−t))^g` | `g > 1` : doux aux extrémités, franc au milieu. `g < 1` : l'inverse |
+| `LINEAR` | `t` | Output proportional to the force |
+| `POWER` | `t^gamma` | `gamma < 1`: bite from the start. `gamma > 1`: progressive, precision at the start of the travel |
+| `SCURVE` | `t<0.5 : ½(2t)^g`<br>`t≥0.5 : 1−½(2(1−t))^g` | `g > 1`: soft at the ends, crisp in the middle. `g < 1`: the opposite |
 
-`gamma = 1` rend les trois courbes identiques (linéaire), ce qui donne un point
-de repère neutre pour comparer.
+`gamma = 1` makes the three curves identical (linear), which gives a neutral
+reference point for comparison.
 
-Le choix de la bonne courbe dépend du ressenti et du montage mécanique — d'où
-le réglage en direct dans l'app plutôt qu'une valeur figée dans le code.
+The choice of the right curve depends on the feel and the mechanical setup:
+hence live tuning in the app rather than a value frozen in the code.
 
-### 3.5 Sortie HID
+### 3.5 HID output
 
-Un seul axe X, plage `0..1023`, type joystick, 0 bouton, 0 hat. Tout ce qui est
-inutile est retiré du descripteur HID : rapport plus court et meilleure
-compatibilité hôte.
+A single X axis, range `0..1023`, joystick type, 0 buttons, 0 hat.
+Everything that is useless is removed from the HID descriptor: shorter report
+and better host compatibility.
 
-1024 pas sur la course du levier dépassent largement la finesse de modulation
-d'un pied ou d'une main, et restent en deçà du bruit résiduel du HX711 : monter
-en résolution n'apporterait que du bruit supplémentaire.
+1024 steps over the lever travel far exceed the modulation finesse of a foot
+or a hand, and stay below the HX711's residual noise: going to a higher
+resolution would only bring more noise.
 
-`begin(false)` + `sendState()` explicite : l'état est envoyé en un rapport
-atomique, jamais partiellement mis à jour. Le rapport n'est émis qu'au
-changement de valeur, avec un renvoi périodique pour garder l'hôte en phase
-même levier immobile.
+`begin(false)` + explicit `sendState()`: the state is sent as one atomic
+report, never partially updated. The report is only emitted on value change,
+with a periodic resend to keep the host in phase even with the lever still.
 
-La pile HID est celle de **MHeironimus/ArduinoJoystickLibrary**, qui permet de
-déclarer exactement les axes voulus et de fixer leur plage. Elle **n'est pas
-dans le gestionnaire de bibliothèques Arduino** : une autre bibliothèque nommée
-« Joystick » y figure, destinée à *lire* un module joystick analogique.
-L'installer produit une erreur `'Joystick_' does not name a type`. Voir le
-README pour l'installation depuis GitHub.
+The HID stack is **MHeironimus/ArduinoJoystickLibrary**, which allows
+declaring exactly the wanted axes and fixing their range. It **is not in the
+Arduino library manager**: another library named "Joystick" is listed there,
+meant for *reading* an analog joystick module. Installing it produces the
+error `'Joystick_' does not name a type`. See the README for installation
+from GitHub.
 
-## 4. Zéro et dérive
+## 4. Zero and drift
 
-Pas de tare automatique au démarrage. `raw_min` issu de la calibration *est* le
-zéro, et il est persistant.
+No automatic tare at startup. `raw_min` from the calibration *is* the zero,
+and it is persistent.
 
-Conséquence assumée : la dérive lente du zéro d'une cellule de charge (thermique,
-tassement mécanique) finira par décaler légèrement le point de repos. La
-correction est un clic sur « Définir le minimum » dans l'app, deux secondes.
+Accepted consequence: the slow drift of a load cell's zero (thermal,
+mechanical settling) will eventually shift the rest point slightly. The fix
+is typing the current raw value into the app's Minimum field, two seconds.
 
-L'alternative — retare au boot — a été écartée : elle produit un zéro faux si
-l'USB est branché alors que le levier est tiré, et ce mode de panne est plus
-pénible que la dérive qu'il corrige.
+The alternative, retaring at boot, was ruled out: it produces a wrong zero
+if the USB is plugged in while the lever is pulled, and that failure mode is
+more painful than the drift it corrects.
 
-## 5. Persistance
+## 5. Persistence
 
-EEPROM interne du 32u4 (1 Ko), adresse 0, enregistrement de 22 octets :
+Internal EEPROM of the 32u4 (1 KB), address 0, record of 22 bytes:
 
-| Offset | Champ | Type |
+| Offset | Field | Type |
 |---|---|---|
-| 0–3 | magic `"HBK1"` | u32 |
+| 0-3 | magic `"HBK1"` | u32 |
 | 4 | version | u8 |
 | 5 | curve | u8 |
-| 6–9 | raw_min | i32 |
-| 10–13 | raw_max | i32 |
-| 14–17 | gamma | float |
+| 6-9 | raw_min | i32 |
+| 10-13 | raw_max | i32 |
+| 14-17 | gamma | float |
 | 18 | calibrated | u8 |
-| 19 | réservé | u8 |
-| 20–21 | CRC-16/CCITT | u16 |
+| 19 | reserved | u8 |
+| 20-21 | CRC-16/CCITT | u16 |
 
-Disposition petit-boutiste écrite octet par octet, et non une `struct`
-sérialisée telle quelle : pas de dépendance au bourrage ni à l'alignement
-choisis par le compilateur, donc le même enregistrement est relu à l'identique
-par la cible AVR et par les tests natifs.
+Little-endian layout written byte by byte, not a `struct` serialized as-is:
+no dependence on the packing or alignment chosen by the compiler, so the same
+record reads back identically on the AVR target and in the native tests.
 
-Magic + version + CRC16 : une EEPROM vierge, corrompue, ou écrite par une
-version antérieure incompatible est détectée et remplacée par les valeurs par
-défaut, plutôt que d'être interprétée comme une calibration valide.
+Magic + version + CRC16: a blank, corrupted, or incompatible older-version
+EEPROM is detected and replaced by the defaults, rather than interpreted as a
+valid calibration.
 
-Un CRC correct ne prouve cependant que l'intégrité. Un enregistrement
-authentique peut contenir des valeurs inexploitables — un `gamma` NaN
-contaminerait tout le calcul de l'axe. `hb_config_sanitize` est donc appliqué
-systématiquement après relecture.
+A correct CRC however only proves integrity: an authentic record can still
+contain unusable values, a NaN `gamma` would poison the whole axis
+computation. `hb_config_sanitize` is therefore applied systematically after
+every read-back.
 
-Écriture **uniquement sur commande `SAVE` explicite**. Les réglages en direct
-(slider gamma) restent en RAM : l'EEPROM AVR est donnée pour ~100 000 cycles
-d'écriture, un slider qui écrirait à chaque mouvement l'userait en quelques
-séances.
+Writing **only on an explicit `SAVE` command**. Live settings (gamma slider)
+stay in RAM: the AVR EEPROM is rated for ~100,000 write cycles, a slider
+writing on every move would wear it out in a few sessions.
 
-Valeurs par défaut, EEPROM vierge : `calibrated = 0`, plage volontairement très
-large. L'axe bouge donc à peine, ce qui rend l'absence de calibration évidente
-au lieu de produire un comportement erratique difficile à diagnostiquer.
+Defaults, blank EEPROM: `calibrated = 0`, deliberately very wide range. The
+axis therefore barely moves, which makes the missing calibration obvious
+instead of producing erratic, hard-to-diagnose behavior.
 
-## 6. Protocole de configuration (CDC série)
+## 6. Configuration protocol (CDC serial)
 
-Lignes ASCII terminées par `\n`, dans les deux sens. Choix du texte plutôt que
-du binaire : lisible dans n'importe quel moniteur série, débogable sans outil.
+ASCII lines terminated with `\n`, in both directions. Text rather than
+binary: readable in any serial monitor, debuggable without tools.
 
-### Hôte → périphérique
+### Host → device
 
-| Commande | Effet |
+| Command | Effect |
 |---|---|
-| `PING` | Test de présence |
-| `GET` | Renvoie la configuration courante |
-| `SET MIN` / `SET MAX` | Capture la valeur filtrée courante |
-| `SET MIN <v>` / `SET MAX <v>` | Fixe une valeur explicite |
-| `SET CURVE LINEAR\|POWER\|SCURVE` | Change la forme de courbe |
-| `SET GAMMA <f>` | Change le paramètre de courbe |
-| `SAVE` | Écrit en EEPROM |
-| `LOAD` | Recharge l'EEPROM (annule les réglages non sauvés) |
-| `RESET` | Valeurs par défaut en RAM |
-| `STREAM 0\|1` | Coupe / active la télémétrie |
+| `PING` | Presence test |
+| `GET` | Returns the current configuration |
+| `SET MIN` / `SET MAX` | Captures the current filtered value |
+| `SET MIN <v>` / `SET MAX <v>` | Sets an explicit value |
+| `SET CURVE LINEAR\|POWER\|SCURVE` | Changes the curve shape |
+| `SET GAMMA <f>` | Changes the curve parameter |
+| `SAVE` | Writes to EEPROM |
+| `LOAD` | Reloads the EEPROM (discards unsaved settings) |
+| `RESET` | Defaults in RAM |
+| `STREAM 0\|1` | Disables / enables telemetry |
 
-### Périphérique → hôte
+### Device → host
 
-- Réponses : `OK <commande> [valeur]` ou `ERR <raison>`
-- Configuration : `CFG min=<i32> max=<i32> curve=<nom> gamma=<f> calibrated=<0|1>`
-- Télémétrie (si `STREAM 1`) : `T raw=<i32> out=<f> axis=<0..1023>`
+- Replies: `OK <command> [value]` or `ERR <reason>`
+- Configuration: `CFG min=<i32> max=<i32> curve=<name> gamma=<f> calibrated=<0|1>`
+- Telemetry (if `STREAM 1`): `T raw=<i32> out=<f> axis=<0..1023> s=<0|1>`
 
-**Télémétrie coupée par défaut**, activée par l'app à la connexion. Un firmware
-qui émettrait en continu risquerait de saturer le tampon CDC quand personne
-n'écoute, au détriment de la boucle HID.
+**Telemetry off by default**, enabled by the app on connect. A firmware
+emitting continuously would risk saturating the CDC buffer when nobody
+listens, at the expense of the HID loop.
 
-### Contrainte AVR : pas de `%f`
+### AVR constraint: no `%f`
 
-L'implémentation `printf` d'avr-libc **n'inclut pas le support des flottants**
-sauf option d'édition de liens spécifique. Un `snprintf("%f")` produit du texte
-vide ou faux sur cette cible, sans erreur de compilation — panne silencieuse
-classique.
+The `printf` implementation in avr-libc **does not include floating-point
+support** without a specific linking option. A `snprintf("%f")` produces
+empty or wrong text on this target, without a compile error, the classic
+silent failure.
 
-Le formatage des flottants passe donc par un helper maison en arithmétique
-entière (`hb_fmt_fixed`), testé nativement. La lecture utilise `strtod`, que
-avr-libc fournit bien.
+Float formatting therefore goes through a home-grown fixed-point helper
+(`hb_fmt_fixed`), tested natively. Parsing uses `strtod`, which avr-libc does
+provide.
 
-## 7. Découpage du code
+## 7. Code layout
 
-Le firmware est séparé en **cœur pur** et **couche matérielle**, pour que la
-logique soit testable sur PC sans carte :
+The firmware is split into a **pure core** and a **hardware layer**, so the
+logic is testable on a PC without the board:
 
 ```
 firmware/handbrake/
-  hb_core.h/.c       C99 pur : config, normalisation, courbes, filtre EMA
-  hb_protocol.h/.c   C99 pur : analyse des commandes, formatage, tampon de ligne
-  hb_record.h/.c     C99 pur : sérialisation de l'enregistrement EEPROM + CRC16
-  hx711.h/.cpp       driver matériel non bloquant
-  hb_storage.h/.cpp  lecture/écriture EEPROM
-  config.h           brochage et constantes
-  handbrake.ino      assemblage : boucle, HID, série
+  hb_core.h/.c       pure C99: config, normalization, curves, EMA filter
+  hb_protocol.h/.c   pure C99: command parsing, formatting, line buffer
+  hb_record.h/.c     pure C99: EEPROM record serialization + CRC16
+  hx711.h/.cpp       non-blocking hardware driver
+  hb_storage.h/.cpp  EEPROM read/write
+  config.h           pinout and constants
+  handbrake.ino      assembly: loop, HID, serial
 ```
 
-`hb_core`, `hb_protocol` et `hb_record` ne dépendent que de la libc et de
-`math.h` : ils sont compilés tels quels par les tests natifs (`tests/`, gcc) et
-par le compilateur AVR. Toute la logique susceptible d'être fausse est ainsi
-couverte par des tests qui tournent en une seconde, sans matériel.
+`hb_core`, `hb_protocol` and `hb_record` depend only on the libc and
+`math.h`: they are compiled as-is by the native tests (`tests/`, gcc) and by
+the AVR compiler. All the logic that could be wrong is thus covered by tests
+that run in a second, without hardware.
 
-La sérialisation est séparée de l'accès EEPROM précisément pour cette raison :
-la détection de corruption casse sans bruit et ne se remarque qu'une fois la
-calibration perdue. `hb_storage` se réduit alors à une boucle de lecture et une
-boucle d'écriture.
+Serialization is separated from EEPROM access precisely for this reason:
+corruption detection failing quietly would only be noticed once the
+calibration is lost. `hb_storage` then reduces to a read loop and a write
+loop.
 
-`hb_storage`, `hx711` et le `.ino` sont volontairement minces : ce qu'ils
-contiennent ne peut être validé qu'avec la carte en main.
+`hb_storage`, `hx711` and the `.ino` are deliberately thin: what they
+contain can only be validated with the board in hand.
 
-## 8. App de calibration
+## 8. Stuck-sensor detection
 
-Python. Serveur local Flask + interface web, présentée dans une fenêtre native
-via `pywebview` — donc une vraie application de bureau Linux/Windows, sans
-embarquer de navigateur (pywebview réutilise le moteur web du système, là où
-Electron ajouterait ~100 Mo).
+A raw value that is bit-identical for `HB_STUCK_TIMEOUT_MS` (1 s) is
+declared a stuck sensor. Rationale: a healthy HX711 at gain 128 has
+permanent LSB jitter, so a value that does not move at all for a second is
+a failure signature (DOUT line stuck low, converter locked), never a quiet
+sensor. The threshold is in time, not in sample count, so it behaves the
+same at any effective rate.
 
-- `protocol.py` — miroir du protocole firmware, pur, testé
-- `link.py` — port série, thread de lecture, file de télémétrie
-- `server.py` — API HTTP locale + SSE pour la télémétrie temps réel
-- `web/index.html` — graphe live, valeurs brutes/mappées, boutons de calibration,
-  sélecteur de courbe, slider gamma, bouton de sauvegarde
+When stuck, the firmware treats the sensor as absent: the axis falls to 0
+instead of freezing, the EMA is reset and a warmup restarts. The first
+different sample clears the condition automatically. `SET MIN` / `SET MAX`
+already refuse to capture without a valid sample, so a stuck sensor cannot
+poison a calibration.
 
-SSE plutôt que WebSocket : flux unidirectionnel serveur→page uniquement, donc
-SSE suffit et tient dans la bibliothèque standard côté navigateur, sans
-dépendance supplémentaire côté serveur.
+The telemetry line reports the condition with the `s` field (`s=0`: no
+valid sample, stuck or absent). The field is optional on the wire: old
+hosts ignore it, and the app parser defaults a missing `s` to 1.
 
-Le transport série est **injecté** dans `SerialLink` plutôt que créé par lui :
-les tests fournissent une carte simulée et couvrent tout le dialogue — ordre
-des réponses, effet des commandes, résistance aux octets parasites — sans
-matériel ni pyserial.
+## 9. Calibration app
 
-Les courbes sont réimplémentées côté hôte plutôt que demandées à la carte, pour
-que l'aperçu tracé montre exactement ce que le firmware calcule. Les tests
-Python reprennent les propriétés vérifiées côté C (points fixes, monotonie,
-symétrie, neutralité de `gamma = 1`).
+Python. Local Flask server + web interface, shown in a native window via
+`pywebview`: a real Linux/Windows desktop application, without bundling a
+browser (pywebview reuses the system web engine, where Electron would add
+~100 MB).
 
-L'énumération des ports ne retient que les périphériques USB : sous Linux,
-pyserial remonte aussi la trentaine de ports 8250 hérités (`/dev/ttyS*`), où la
-carte serait introuvable. Repli sur la liste complète si aucun port USB n'est
-détecté — mieux vaut un choix encombré qu'aucun choix.
+- `protocol.py`: mirror of the firmware protocol, pure, tested
+- `link.py`: serial port, read thread, telemetry queue
+- `server.py`: local HTTP API + SSE for real-time telemetry
+- `web/index.html`: live plot, raw/mapped values, editable min/max fields,
+  curve selector, gamma slider, save button
 
-## 9. Plan de validation
+SSE rather than WebSocket: a one-way server→page stream only, so SSE
+suffices and stays in the browser standard library, with no extra
+server-side dependency.
 
-| Étape | Vérifie | État |
+The serial transport is **injected** into `SerialLink` rather than created
+by it: the tests provide a simulated board and cover the whole dialog (order
+of replies, effect of the commands, resistance to stray bytes), without
+hardware or pyserial.
+
+The curves are reimplemented on the host side rather than requested from the
+board, so the drawn preview shows exactly what the firmware computes. The
+Python tests repeat the properties verified on the C side (fixed points,
+monotonicity, symmetry, neutrality of `gamma = 1`).
+
+Port enumeration keeps only USB devices: on Linux, pyserial also lists the
+thirty or so inherited 8250 ports (`/dev/ttyS*`), where the board would be
+unfindable. Fallback to the full list if no USB port is detected: better a
+crowded choice than no choice.
+
+## 10. Link manager
+
+The app owns the serial link through a background thread (`LinkManager`):
+
+- every ~2 s it scans the USB serial ports and connects to the board,
+  recognized by its USB identifier (Arduino 2341:8036 / 2341:8037), or by
+  the lone USB serial port when no known board is present; several unknown
+  ports are refused with an explicit error;
+- a watchdog checks the read thread every ~0.5 s: when the board is
+  unplugged the link is dropped and the manager goes back to searching;
+- when the board comes back it is reconnected automatically (worst case a
+  few seconds after the replug).
+
+The web page only observes: it polls `/api/status` at 1 Hz and keeps one
+EventSource on `/api/stream`. When the link is replaced, the old stream
+ends and the browser's EventSource re-subscribes to the new link on its
+own. Manual connect/disconnect endpoints no longer exist.
+
+## 11. Validation plan
+
+| Step | Verifies | Status |
 |---|---|---|
-| Tests natifs C | Courbes, normalisation, filtre, protocole, formatage, EEPROM | ✅ 3425 assertions |
-| Tests pytest | Protocole hôte, dialogue série, API serveur, ports | ✅ 113 tests |
-| Compilation AVR | Le firmware compile pour l'ATmega32u4 | ✅ 62 % flash, 26 % RAM |
-| Énumération HID | Le système voit un joystick à un axe | ✅ Linux, `ABS_X` seul |
-| Protocole sur matériel | PING, GET, STREAM, SET, RESET, erreurs | ✅ |
-| EEPROM vierge | Repli sur les valeurs par défaut, `calibrated=0` | ✅ |
-| Lecture HX711 brute | Câblage, bruit, plage, signe | ⏳ capteur requis |
-| Persistance EEPROM | Écriture puis relecture après débranchement | ⏳ |
-| Énumération HID Windows | `joy.cpl` voit l'axe bouger | ⏳ |
-| Essai en jeu | Ressenti, choix final de la courbe | ⏳ |
+| Native C tests | Curves, normalization, filter, protocol, formatting, EEPROM | ✅ 3425 assertions |
+| pytest tests | Host protocol, serial dialog, server API, ports | ✅ 113 tests |
+| AVR compile | The firmware compiles for the ATmega32u4 | ✅ 62% flash, 26% RAM |
+| HID enumeration | The system sees a one-axis joystick | ✅ Linux, `ABS_X` only |
+| Protocol on hardware | PING, GET, STREAM, SET, RESET, errors | ✅ |
+| Blank EEPROM | Fallback to the defaults, `calibrated=0` | ✅ |
+| Raw HX711 read | Wiring, noise, range, sign | ⏳ sensor required |
+| EEPROM persistence | Write then read back after unplug | ⏳ |
+| HID enumeration, Windows | `joy.cpl` sees the axis move | ⏳ |
+| In-game test | Feel, final curve choice | ⏳ |
 
-Les tests avec carte simulée valident le *dialogue*, pas le matériel : ils ne
-disent rien du bruit réel du HX711, de la stabilité mécanique du montage, ni de
-la façon dont un jeu donné interprète l'axe.
+The simulated-board tests validate the *dialog*, not the hardware: they say
+nothing about the real HX711 noise, the mechanical stability of the setup, or
+the way a given game interprets the axis.
 
-Constaté au premier branchement, capteur non câblé : la télémétrie renvoie
-`raw=0 out=0.000 axis=0` de façon stable. C'est le pull-up sur la ligne DT qui
-produit ce résultat — sans lui, l'entrée flottante aurait fait remonter du
-bruit présenté comme une mesure (voir §3.1).
+Observed at first plug-in, sensor not wired: the telemetry stably returns
+`raw=0 out=0.000 axis=0`. It is the pull-up on the DT line that produces
+this result; without it, the floating input would have surfaced noise
+presented as a measurement (see §3.1).
 
-## 10. Hors périmètre (v1)
+## 12. Out of scope (v1)
 
-- **Bluetooth / sans fil** — l'ATmega32u4 n'a pas de radio. Un handbrake sans fil
-  complet imposerait un autre MCU (ESP32 et BLE HID) et une autre architecture.
-- **Boutons / LED** — écartés volontairement : l'app couvre le besoin de
-  calibration, une LED n'apporterait rien de plus.
-- **Éditeur de courbe libre (splines, points)** — trois formes paramétriques
-  couvrent l'espace de ressenti utile. À reconsidérer seulement si l'essai en
-  jeu montre qu'aucune ne convient.
+- **Bluetooth / wireless**: the ATmega32u4 has no radio. A complete wireless
+  handbrake would require another MCU (ESP32 and BLE HID) and another
+  architecture.
+- **Buttons / LED**: ruled out deliberately: the app covers the calibration
+  need, an LED would add nothing more.
+- **Free curve editor (splines, points)**: the three parametric shapes cover
+  the useful feel space. Reconsider only if the in-game test shows that none
+  fits.

@@ -1,109 +1,109 @@
-# Câblage — montage de test sur breadboard
+# Wiring - test setup on a breadboard
 
-## Matériel
+## Hardware
 
-- Cellule de charge 20 kg (4 fils)
-- Module HX711
+- 20 kg load cell (4 wires)
+- HX711 module
 - Pro Micro ATmega32u4, 5 V / 16 MHz, USB-C
 - Breadboard + straps
-- Câble USB-C
+- USB-C cable
 
-Tout est alimenté par le port USB-C du Pro Micro. Aucune alimentation externe.
+Everything is powered by the Pro Micro's USB-C port. No external power
+supply.
 
-## Schéma
+## Diagram
 
 ```
-         CELLULE DE CHARGE 20 kg
+         LOAD CELL 20 kg
         ┌──────────────────────┐
-        │  rouge   E+ ─────────┼───► E+  ┐
-        │  noir    E- ─────────┼───► E-  │  bornier à vis
-        │  vert    A+ ─────────┼───► A+  │  du module HX711
-        │  blanc   A- ─────────┼───► A-  ┘
+        │  red     E+ ─────────┼───► E+  ┐
+        │  black   E- ─────────┼───► E-  │  screw terminal
+        │  green   A+ ─────────┼───► A+  │  of the HX711 module
+        │  white   A- ─────────┼───► A-  ┘
         └──────────────────────┘
 
               MODULE HX711                    PRO MICRO 32u4
         ┌──────────────────────┐          ┌──────────────────┐
         │  VCC  ───────────────┼──────────┤ VCC   (5 V)      │
         │  GND  ───────────────┼──────────┤ GND              │
-        │  DT   ───────────────┼──────────┤ 4   (données)    │
-        │  SCK  ───────────────┼──────────┤ 5   (horloge)    │
+        │  DT   ───────────────┼──────────┤ 4   (data)       │
+        │  SCK  ───────────────┼──────────┤ 5   (clock)      │
         │  RATE ───────────────┼──────────┤ VCC   (→ 80 SPS) │
         └──────────────────────┘          └────────┬─────────┘
                                                    │ USB-C
-                                                   ▼  vers PC
+                                                   ▼  to the PC
 ```
 
-## Table de correspondance
+## Pin mapping
 
-### Cellule → HX711
+### Load cell → HX711
 
-| Fil cellule | Borne HX711 |
+| Cell wire | HX711 pin |
 | --- | --- |
 | E+ | E+ |
 | E− | E− |
 | A+ | A+ |
 | A− | A− |
 
-⚠️ **Les couleurs varient selon le fabricant.** La convention la plus courante est
-rouge = E+, noir = E−, vert = A+, blanc = A−, mais il faut vérifier sur la notice
-fournie avec la cellule.
+⚠️ **Wire colors vary by manufacturer.** The most common convention is red =
+E+, black = E−, green = A+, white = A−, but check the datasheet provided with
+the cell.
 
-Se tromper entre A+ et A− n'a aucune conséquence ici : le signe s'inverse, et la
-normalisation min/max l'absorbe automatiquement (voir `docs/design.md` §3.3).
-Inverser E+ et E− est en revanche à éviter.
+Mixing up A+ and A− has no consequence here: the sign flips, and the min/max
+normalization absorbs it automatically (see `docs/design.md` §3.3). Reversing
+E+ and E− is to be avoided, however.
 
 ### HX711 → Pro Micro
 
-| HX711 | Pro Micro | Défini dans |
+| HX711 | Pro Micro | Defined in |
 | --- | --- | --- |
-| VCC | `VCC` | — |
-| GND | `GND` | — |
-| DT | broche 4 | `config.h` → `HB_PIN_HX711_DT` |
-| SCK | broche 5 | `config.h` → `HB_PIN_HX711_SCK` |
-| RATE | `VCC` | — |
+| VCC | `VCC` | - |
+| GND | `GND` | - |
+| DT | pin 4 | `config.h` → `HB_PIN_HX711_DT` |
+| SCK | pin 5 | `config.h` → `HB_PIN_HX711_SCK` |
+| RATE | `VCC` | - |
 
-**`VCC` et non `RAW`** : sur un Pro Micro, `RAW` est une *entrée* d'alimentation
-(avant régulateur). La sortie régulée 5 V utilisable est la broche `VCC`.
+**`VCC` and not `RAW`**: on a Pro Micro, `RAW` is a *power input* (before the
+regulator). The usable 5 V regulated output is the `VCC` pin.
 
-**`RATE` → `VCC`** fait passer le HX711 de 10 à 80 échantillons/seconde. Sur
-certains modules cette broche n'est pas sortie sur le connecteur : il faut alors
-un pont de soudure sur le pad `RATE` au dos de la carte. Si ce n'est pas fait, le
-montage fonctionne quand même, mais avec une latence de ~100 ms au lieu de
-~12,5 ms — nettement perceptible en jeu.
+**`RATE` → `VCC`** switches the HX711 from 10 to 80 samples per second. On
+some modules this pin is not broken out on the connector: a solder bridge is
+then needed on the `RATE` pad on the back of the board. If it is not done,
+the setup still works, but with a latency of ~100 ms instead of ~12.5 ms:
+clearly noticeable in a game.
 
-Les broches 4 et 5 sont des GPIO libres, sans conflit avec l'USB ni avec quoi que
-ce soit d'autre. Elles sont modifiables dans `firmware/handbrake/config.h`.
+Pins 4 and 5 are free GPIOs, with no conflict with the USB or anything else.
+They are changeable in `firmware/handbrake/config.h`.
 
-## Vérification avant la première mise sous tension
+## Checks before first power-up
 
-1. Aucun court-circuit entre `VCC` et `GND`.
-2. Les 4 fils de la cellule sont bien serrés dans le bornier (les fils fins
-   ressortent facilement).
-3. `RATE` est bien sur `VCC`, pas sur `GND`.
-4. La cellule est montée **dans le bon sens** mécaniquement : la flèche gravée
-   sur son flanc indique le sens de la force. Une cellule montée à l'envers
-   fonctionne mais travaille en compression au lieu de traction — le signe est
-   inversé (sans conséquence logicielle) mais la tenue mécanique est moins bonne.
+1. No short circuit between `VCC` and `GND`.
+2. The 4 cell wires are firmly tightened in the terminal block (thin wires
+   pop out easily).
+3. `RATE` is indeed on `VCC`, not on `GND`.
+4. The cell is mounted **the right way** mechanically: the arrow engraved on
+   its side indicates the direction of the force. A cell mounted backwards
+   still works but works in compression instead of tension: the sign is
+   inverted (no software consequence) but the mechanical hold is weaker.
 
-## Première mise en route
+## First startup
 
 ```bash
-# 1. Vérifier que la lecture brute réagit
-#    (téléverser le firmware, puis :)
+# 1. Check that the raw reading reacts
+#    (flash the firmware first, then:)
 python -m handbrake_tuner
 
-# 2. Sans toucher le levier          → cliquer « Définir le minimum »
-# 3. En tirant à la force maximale   → cliquer « Définir le maximum »
-# 4. Ajuster la courbe au ressenti   → cliquer « Sauvegarder »
+# 2. Lever at rest                → type the shown raw value into the Minimum field
+# 3. Pull with the maximum force  → type that raw value into the Maximum field
+# 4. Adjust the curve by feel     → click "Save to the board"
 ```
 
-Si la valeur brute ne bouge pas du tout quand on appuie sur la cellule :
-vérifier DT/SCK, puis les 4 fils de la cellule. Si elle saute entre des valeurs
-extrêmes de façon erratique : mauvaise masse ou alimentation instable.
+If the raw value does not move at all when you press on the cell: check
+DT/SCK, then the 4 cell wires. If it jumps erratically between extreme
+values: bad ground or unstable power supply.
 
-## Passage au montage définitif
+## Moving to the final build
 
-Les « grilles vertes avec plein de trous » évoquées pour la version définitive
-s'appellent des **plaques d'essai à pastilles** (perfboard / veroboard). Le
-câblage ci-dessus s'y transpose à l'identique, en soudant les liaisons au lieu
-d'utiliser des straps.
+The "green grids full of holes" mentioned for the final version are called
+**perfboards** (veroboard). The wiring above transfers to them identically,
+with soldered connections instead of straps.
