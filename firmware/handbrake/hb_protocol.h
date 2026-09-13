@@ -1,12 +1,12 @@
 /*
- * hb_protocol — protocole série de configuration.
+ * hb_protocol - configuration serial protocol.
  *
- * Lignes ASCII terminées par \n dans les deux sens. C99 pur : compilé à
- * l'identique par le compilateur AVR et par les tests natifs.
+ * ASCII lines terminated by \n in both directions. Pure C99: compiled
+ * identically by the AVR compiler and by the native tests.
  *
- * Le formatage des flottants n'utilise pas printf : l'implémentation
- * d'avr-libc ne gère pas %f sans option d'édition de liens spécifique, et
- * échoue silencieusement. Voir hb_fmt_fixed().
+ * Float formatting does not use printf: the avr-libc implementation does
+ * not handle %f without a specific link option, and fails silently. See
+ * hb_fmt_fixed().
  */
 #ifndef HB_PROTOCOL_H
 #define HB_PROTOCOL_H
@@ -20,11 +20,11 @@
 extern "C" {
 #endif
 
-/* Assez pour la plus longue commande, avec de la marge. Une ligne plus longue
- * est rejetée plutôt que tronquée silencieusement. */
+/* Enough for the longest command, with margin. A longer line is rejected
+ * rather than silently truncated. */
 #define HB_LINE_MAX 64
 
-/* Assez pour la plus longue réponse (CFG complète). */
+/* Enough for the longest reply (full CFG). */
 #define HB_REPLY_MAX 96
 
 typedef enum {
@@ -43,38 +43,38 @@ typedef enum {
 
 typedef struct {
     uint8_t kind;      /* hb_cmd_kind_t */
-    uint8_t has_value; /* SET MIN/MAX : 1 si une valeur explicite est fournie */
+    uint8_t has_value; /* SET MIN/MAX: 1 if an explicit value is provided */
     int32_t ivalue;    /* SET MIN/MAX <v>, STREAM <0|1> */
     float   fvalue;    /* SET GAMMA <f>, SET CURVE POWER <f> */
     uint8_t curve;     /* SET CURVE : hb_curve_t */
-    uint8_t has_gamma; /* SET CURVE : 1 si un gamma accompagne la courbe */
+    uint8_t has_gamma; /* SET CURVE: 1 if a gamma accompanies the curve */
 } hb_cmd_t;
 
-/* Analyse une ligne (sans le \n final).
- * Renvoie 0 pour une ligne vide ou uniquement composée d'espaces, 1 sinon.
- * Une commande non reconnue renvoie 1 avec kind == HB_CMD_UNKNOWN. */
+/* Parses a line (without its final \n).
+ * Returns 0 for an empty or spaces-only line, 1 otherwise.
+ * An unrecognized command returns 1 with kind == HB_CMD_UNKNOWN. */
 int hb_parse_command(const char *line, hb_cmd_t *out);
 
-/* Nom textuel d'une courbe, tel qu'utilisé dans le protocole. */
+/* Textual name of a curve, as used in the protocol. */
 const char *hb_curve_name(uint8_t curve);
 
-/* Analyse un nom de courbe, insensible à la casse.
- * Renvoie 1 et remplit *out si reconnu, 0 sinon. */
+/* Parses a curve name, case-insensitively.
+ * Returns 1 and fills *out if recognized, 0 otherwise. */
 int hb_curve_from_name(const char *name, uint8_t *out);
 
-/* Écrit un flottant en notation décimale fixe, sans printf.
- * Renvoie le nombre de caractères écrits (hors \0), ou 0 si le tampon est
- * trop petit — auquel cas buf reçoit une chaîne vide. */
+/* Writes a float in fixed decimal notation, without printf.
+ * Returns the number of characters written (excluding \0), or 0 if the
+ * buffer is too small - in which case buf receives an empty string. */
 size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals);
 
-/* "CFG min=… max=… curve=… gamma=… calibrated=…" */
+/* "CFG min=... max=... curve=... gamma=... calibrated=..." */
 size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg);
 
-/* "T raw=… out=… axis=… s=…" — s=1 with a valid sample, s=0 otherwise. */
+/* "T raw=... out=... axis=... s=..." - s=1 with a valid sample, s=0 otherwise. */
 size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
                            uint16_t axis, int sensor_ok);
 
-/* --- Accumulation de ligne --------------------------------------------- */
+/* --- Line accumulation --------------------------------------------------- */
 
 typedef struct {
     char    buf[HB_LINE_MAX];
@@ -85,13 +85,13 @@ typedef struct {
 
 void hb_linebuf_init(hb_linebuf_t *lb);
 
-/* Ajoute un caractère reçu.
- * Renvoie 1 quand une ligne complète est disponible dans lb->buf (terminée
- * par \0), 0 sinon. Une ligne trop longue est signalée par lb->overflow au
- * moment où elle est rendue : l'appelant doit alors la rejeter.
+/* Feeds a received character.
+ * Returns 1 when a full line is available in lb->buf (terminated by \0),
+ * 0 otherwise. A line that is too long is flagged by lb->overflow at the
+ * moment it is returned: the caller must then reject it.
  *
- * Le tampon se réarme tout seul à l'appel suivant : l'appelant lit buf et
- * overflow juste après un retour à 1, sans avoir à réinitialiser. */
+ * The buffer re-arms itself on the next call: the caller reads buf and
+ * overflow right after a return of 1, without having to reset anything. */
 int hb_linebuf_push(hb_linebuf_t *lb, char ch);
 
 #ifdef __cplusplus

@@ -1,10 +1,9 @@
 /*
- * Persistance de la configuration en EEPROM interne du 32u4.
+ * Persistence of the configuration in the internal EEPROM of the 32u4.
  *
- * L'enregistrement porte un magic, une version et un CRC : une EEPROM vierge,
- * corrompue ou écrite par une version incompatible est détectée et remplacée
- * par les valeurs par défaut, au lieu d'être prise pour une calibration
- * valide.
+ * The record carries a magic, a version and a CRC: a blank, corrupted or
+ * incompatible-version EEPROM is detected and replaced by the defaults,
+ * instead of being taken for a valid calibration.
  */
 #ifndef HB_STORAGE_H
 #define HB_STORAGE_H
@@ -13,14 +12,13 @@
 
 #include "hb_core.h"
 
-/* Charge la configuration.
- * Renvoie true si un enregistrement valide a été trouvé. Sinon, cfg reçoit
- * les valeurs par défaut et renvoie false. Dans les deux cas, cfg est
- * exploitable en sortie. */
+/* Loads the configuration.
+ * Returns true if a valid record was found. Otherwise, cfg receives the
+ * defaults and it returns false. In both cases, cfg is usable on output. */
 bool hb_storage_load(hb_config_t &cfg);
 
-/* Écrit la configuration. N'écrit réellement que les octets qui changent :
- * l'EEPROM AVR est donnée pour ~100 000 cycles par octet. */
+/* Writes the configuration. Only the bytes that change are actually written:
+ * the AVR EEPROM is rated for ~100,000 cycles per byte. */
 void hb_storage_save(const hb_config_t &cfg);
 
 #endif /* HB_STORAGE_H */

@@ -17,7 +17,7 @@ bool hb_storage_load(hb_config_t &cfg)
         return true;
     }
 
-    /* EEPROM vierge, corrompue, ou écrite par une version incompatible. */
+    /* Blank, corrupted, or written by an incompatible version. */
     hb_config_defaults(&cfg);
     return false;
 }
@@ -28,9 +28,9 @@ void hb_storage_save(const hb_config_t &cfg)
 
     hb_record_pack(buf, &cfg);
 
-    /* update() et non write() : l'octet n'est réécrit que s'il change. Une
-     * sauvegarde qui ne modifie qu'un champ ne consomme donc pas un cycle
-     * d'écriture sur les 22 octets. */
+    /* update() and not write(): the byte is only rewritten if it changes.
+     * A save that modifies a single field therefore does not consume a write
+     * cycle on all 22 bytes. */
     for (uint16_t i = 0; i < HB_RECORD_SIZE; i++) {
         EEPROM.update(HB_EEPROM_ADDR + i, buf[i]);
     }

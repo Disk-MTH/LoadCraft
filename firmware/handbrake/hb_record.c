@@ -3,16 +3,16 @@
 #include <string.h>
 
 /*
- * Disposition (petit-boutiste) :
+ * Layout (little-endian):
  *   0..3   magic        u32
  *   4      version      u8
  *   5      curve        u8
  *   6..9   raw_min      i32
  *   10..13 raw_max      i32
- *   14..17 gamma        float (bits IEEE-754)
+ *   14..17 gamma        float (IEEE-754 bits)
  *   18     calibrated   u8
- *   19     réservé      u8, à zéro
- *   20..21 crc16        u16, sur les octets 0..19
+ *   19     reserved     u8, zero
+ *   20..21 crc16        u16, over bytes 0..19
  */
 #define OFF_MAGIC      0
 #define OFF_VERSION    4
@@ -49,9 +49,9 @@ static uint16_t get_u16(const uint8_t *buf)
     return (uint16_t)((uint16_t)buf[0] | ((uint16_t)buf[1] << 8));
 }
 
-/* Le flottant transite par ses bits bruts. AVR et x86 utilisent tous deux des
- * flottants IEEE-754 32 bits petit-boutistes, l'enregistrement est donc lu à
- * l'identique par les tests natifs et par la cible. */
+/* The float goes through its raw bits. Both AVR and x86 use little-endian
+ * 32-bit IEEE-754 floats, so the record is read identically by the native
+ * tests and by the target. */
 static void put_f32(uint8_t *buf, float v)
 {
     uint32_t bits;
@@ -116,9 +116,9 @@ int hb_record_unpack(const uint8_t *buf, hb_config_t *cfg)
     parsed.gamma      = get_f32(buf + OFF_GAMMA);
     parsed.calibrated = buf[OFF_CALIBRATED];
 
-    /* Un CRC correct ne garantit que l'intégrité, pas la validité : un
-     * enregistrement écrit par une version au domaine plus large resterait
-     * intact tout en contenant un gamma inexploitable. */
+    /* A correct CRC only guarantees integrity, not validity: a record
+     * written by a version with a wider domain would stay intact while
+     * holding an unusable gamma. */
     hb_config_sanitize(&parsed);
 
     *cfg = parsed;

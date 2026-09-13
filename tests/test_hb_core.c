@@ -2,9 +2,9 @@
 #include "hb_core.h"
 #include "test_harness.h"
 
-/* --- Normalisation ------------------------------------------------------ */
+/* --- Normalization ------------------------------------------------------ */
 
-static void test_normalize_plage_normale(void)
+static void test_normalize_normal_range(void)
 {
     CHECK_NEAR(hb_normalize(1000, 1000, 2000), 0.0f, 1e-6);
     CHECK_NEAR(hb_normalize(1500, 1000, 2000), 0.5f, 1e-6);
@@ -12,15 +12,15 @@ static void test_normalize_plage_normale(void)
     CHECK_NEAR(hb_normalize(1250, 1000, 2000), 0.25f, 1e-6);
 }
 
-static void test_normalize_borne_hors_plage(void)
+static void test_normalize_clamps_out_of_range(void)
 {
     CHECK_NEAR(hb_normalize(500, 1000, 2000), 0.0f, 1e-6);
     CHECK_NEAR(hb_normalize(9999, 1000, 2000), 1.0f, 1e-6);
 }
 
-/* Une cellule câblée en polarité inverse produit une plage décroissante.
- * C'est ce qui permet de ne pas exposer d'option « inverser l'axe ». */
-static void test_normalize_plage_inversee(void)
+/* A cell wired with reversed polarity produces a descending range.
+ * That is what lets us not expose an "invert axis" option. */
+static void test_normalize_inverted_range(void)
 {
     CHECK_NEAR(hb_normalize(2000, 2000, 1000), 0.0f, 1e-6);
     CHECK_NEAR(hb_normalize(1500, 2000, 1000), 0.5f, 1e-6);
@@ -29,67 +29,68 @@ static void test_normalize_plage_inversee(void)
     CHECK_NEAR(hb_normalize(0, 2000, 1000), 1.0f, 1e-6);
 }
 
-static void test_normalize_plage_nulle(void)
+static void test_normalize_zero_range(void)
 {
     CHECK_NEAR(hb_normalize(1000, 1000, 1000), 0.0f, 1e-6);
     CHECK_NEAR(hb_normalize(5000, 1000, 1000), 0.0f, 1e-6);
 }
 
-static void test_normalize_valeurs_negatives(void)
+static void test_normalize_negative_values(void)
 {
     CHECK_NEAR(hb_normalize(-500, -1000, 0), 0.5f, 1e-6);
     CHECK_NEAR(hb_normalize(-8388608L, -8388608L, 8388607L), 0.0f, 1e-6);
     CHECK_NEAR(hb_normalize(8388607L, -8388608L, 8388607L), 1.0f, 1e-6);
-    /* Cas où (raw - raw_min) déborderait un int32 s'il était calculé en
-     * entier : le calcul passe par des flottants pour cette raison. */
+    /* Case where (raw - raw_min) would overflow an int32 if it were
+     * computed in integer: the computation goes through floats for that
+     * reason. */
     CHECK_NEAR(hb_normalize(0, -8388608L, 8388607L), 0.5f, 1e-3);
 }
 
-/* --- Courbes ------------------------------------------------------------ */
+/* --- Curves ------------------------------------------------------------- */
 
-static void test_courbe_lineaire(void)
+static void test_curve_linear(void)
 {
     CHECK_NEAR(hb_curve_apply(HB_CURVE_LINEAR, 1.0f, 0.0f), 0.0f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_LINEAR, 1.0f, 0.37f), 0.37f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_LINEAR, 1.0f, 1.0f), 1.0f, 1e-6);
-    /* gamma est ignoré en linéaire */
+    /* gamma is ignored in linear */
     CHECK_NEAR(hb_curve_apply(HB_CURVE_LINEAR, 3.0f, 0.5f), 0.5f, 1e-6);
 }
 
-static void test_courbe_puissance(void)
+static void test_curve_power(void)
 {
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 2.0f, 0.5f), 0.25f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 0.5f, 0.25f), 0.5f, 1e-6);
-    /* Les extrémités sont des points fixes quel que soit gamma */
+    /* The ends are fixed points whatever gamma */
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 2.5f, 0.0f), 0.0f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 2.5f, 1.0f), 1.0f, 1e-6);
 }
 
-static void test_courbe_s(void)
+static void test_curve_s(void)
 {
-    /* Points fixes : 0, 0,5 et 1 quel que soit gamma */
+    /* Fixed points: 0, 0.5 and 1 whatever gamma */
     CHECK_NEAR(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.0f), 0.0f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.5f), 0.5f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 1.0f), 1.0f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_SCURVE, 0.4f, 0.5f), 0.5f, 1e-6);
 
-    /* gamma > 1 : douce aux extrémités, donc sous la diagonale avant 0,5 */
+    /* gamma > 1: soft at the ends, so below the diagonal before 0.5 */
     CHECK(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.25f) < 0.25f);
     CHECK(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.75f) > 0.75f);
 
-    /* gamma < 1 : comportement inverse */
+    /* gamma < 1: reverse behavior */
     CHECK(hb_curve_apply(HB_CURVE_SCURVE, 0.5f, 0.25f) > 0.25f);
     CHECK(hb_curve_apply(HB_CURVE_SCURVE, 0.5f, 0.75f) < 0.75f);
 
-    /* Symétrie autour de (0,5 ; 0,5) */
+    /* Symmetry around (0.5, 0.5) */
     CHECK_NEAR(hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.3f)
                    + hb_curve_apply(HB_CURVE_SCURVE, 2.0f, 0.7f),
                1.0f, 1e-5);
 }
 
-/* gamma = 1 doit rendre les trois courbes identiques : c'est le repère neutre
- * annoncé à l'utilisateur dans l'app. */
-static void test_gamma_un_neutralise_les_courbes(void)
+/* gamma = 1 must make the three curves identical: it is the neutral
+ * reference announced to the user in the app. */
+static void test_gamma_one_neutralizes_curves(void)
 {
     float t;
     for (t = 0.0f; t <= 1.0f; t += 0.1f) {
@@ -98,7 +99,7 @@ static void test_gamma_un_neutralise_les_courbes(void)
     }
 }
 
-static void test_courbes_sont_monotones(void)
+static void test_curves_are_monotonic(void)
 {
     const uint8_t curves[] = {HB_CURVE_LINEAR, HB_CURVE_POWER, HB_CURVE_SCURVE};
     const float   gammas[] = {0.2f, 0.5f, 1.0f, 2.0f, 4.0f};
@@ -119,32 +120,32 @@ static void test_courbes_sont_monotones(void)
     }
 }
 
-static void test_courbe_inconnue_retombe_en_lineaire(void)
+static void test_unknown_curve_falls_back_to_linear(void)
 {
     CHECK_NEAR(hb_curve_apply(99, 2.0f, 0.42f), 0.42f, 1e-6);
 }
 
-static void test_courbe_borne_son_entree(void)
+static void test_curve_clamps_its_input(void)
 {
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 2.0f, -1.0f), 0.0f, 1e-6);
     CHECK_NEAR(hb_curve_apply(HB_CURVE_POWER, 2.0f, 5.0f), 1.0f, 1e-6);
 }
 
-/* --- Axe HID ------------------------------------------------------------ */
+/* --- HID axis ----------------------------------------------------------- */
 
-static void test_axe_hid(void)
+static void test_hid_axis(void)
 {
     CHECK_EQ_INT(hb_axis_from_unit(0.0f), 0);
     CHECK_EQ_INT(hb_axis_from_unit(1.0f), HB_AXIS_MAX);
     CHECK_EQ_INT(hb_axis_from_unit(0.5f), 512);
-    /* Borné, jamais de repli sur un entier non signé */
+    /* Bounded, never a wraparound to an unsigned integer */
     CHECK_EQ_INT(hb_axis_from_unit(-0.5f), 0);
     CHECK_EQ_INT(hb_axis_from_unit(2.0f), HB_AXIS_MAX);
 }
 
 /* --- Configuration ------------------------------------------------------ */
 
-static void test_config_par_defaut(void)
+static void test_config_defaults(void)
 {
     hb_config_t cfg;
     hb_config_defaults(&cfg);
@@ -152,20 +153,21 @@ static void test_config_par_defaut(void)
     CHECK_EQ_INT(cfg.curve, HB_CURVE_LINEAR);
     CHECK_NEAR(cfg.gamma, 1.0f, 1e-6);
     CHECK_EQ_INT(cfg.calibrated, 0);
-    /* Rien à corriger sur les valeurs par défaut */
+    /* Nothing to correct on the default values */
     CHECK_EQ_INT(hb_config_sanitize(&cfg), 0);
 }
 
-/* Plage par défaut si large que l'axe reste quasi immobile : l'absence de
- * calibration doit sauter aux yeux plutôt que produire un axe erratique. */
-static void test_defaut_non_calibre_bouge_a_peine(void)
+/* Default range so wide the axis stays nearly still: the absence of
+ * calibration must jump out at the user rather than produce an erratic
+ * axis. */
+static void test_default_uncalibrated_barely_moves(void)
 {
     hb_config_t cfg;
     hb_config_defaults(&cfg);
     CHECK(hb_axis_from_unit(hb_process(&cfg, 50000)) < 10);
 }
 
-static void test_sanitize_borne_gamma(void)
+static void test_sanitize_clamps_gamma(void)
 {
     hb_config_t cfg;
 
@@ -185,9 +187,9 @@ static void test_sanitize_borne_gamma(void)
     CHECK_NEAR(cfg.gamma, HB_GAMMA_MIN, 1e-6);
 }
 
-/* Un gamma NaN venant d'une EEPROM corrompue ne doit pas se propager dans la
- * chaîne de traitement, sinon l'axe entier devient NaN. */
-static void test_sanitize_rattrape_nan(void)
+/* A NaN gamma coming from a corrupted EEPROM must not propagate through the
+ * processing chain, otherwise the whole axis becomes NaN. */
+static void test_sanitize_recovers_nan(void)
 {
     hb_config_t cfg;
     hb_config_defaults(&cfg);
@@ -197,7 +199,7 @@ static void test_sanitize_rattrape_nan(void)
     CHECK_NEAR(cfg.gamma, 1.0f, 1e-6);
 }
 
-static void test_sanitize_borne_courbe_et_plage(void)
+static void test_sanitize_clamps_curve_and_range(void)
 {
     hb_config_t cfg;
 
@@ -207,7 +209,7 @@ static void test_sanitize_borne_courbe_et_plage(void)
     CHECK_EQ_INT(cfg.curve, HB_CURVE_LINEAR);
 
     hb_config_defaults(&cfg);
-    cfg.raw_min = 99999999L; /* au-delà des 24 bits du HX711 */
+    cfg.raw_min = 99999999L; /* beyond the HX711's 24 bits */
     CHECK_EQ_INT(hb_config_sanitize(&cfg), 1);
     CHECK_EQ_INT(cfg.raw_min, 8388607L);
 
@@ -217,9 +219,9 @@ static void test_sanitize_borne_courbe_et_plage(void)
     CHECK_EQ_INT(cfg.calibrated, 1);
 }
 
-/* --- Chaîne complète ---------------------------------------------------- */
+/* --- Full chain --------------------------------------------------------- */
 
-static void test_process_bout_en_bout(void)
+static void test_process_end_to_end(void)
 {
     hb_config_t cfg;
 
@@ -232,9 +234,9 @@ static void test_process_bout_en_bout(void)
     CHECK_EQ_INT(hb_axis_from_unit(hb_process(&cfg, 900000)), HB_AXIS_MAX);
     CHECK_EQ_INT(hb_axis_from_unit(hb_process(&cfg, 500000)), 512);
 
-    /* Sous le minimum : l'axe reste à zéro, le levier est au repos. */
+    /* Below the minimum: the axis stays at zero, the lever is at rest. */
     CHECK_EQ_INT(hb_axis_from_unit(hb_process(&cfg, 50000)), 0);
-    /* Au-delà du maximum : saturé, pas de retour à zéro. */
+    /* Beyond the maximum: saturated, no return to zero. */
     CHECK_EQ_INT(hb_axis_from_unit(hb_process(&cfg, 2000000)), HB_AXIS_MAX);
 
     cfg.curve = HB_CURVE_POWER;
@@ -242,11 +244,11 @@ static void test_process_bout_en_bout(void)
     CHECK_EQ_INT(hb_axis_from_unit(hb_process(&cfg, 500000)), 256);
 }
 
-/* --- Filtre EMA --------------------------------------------------------- */
+/* --- EMA filter --------------------------------------------------------- */
 
-/* Le premier échantillon est adopté tel quel, sinon le filtre mettrait des
- * dizaines de lectures à rejoindre le niveau réel depuis zéro. */
-static void test_ema_adopte_le_premier_echantillon(void)
+/* The first sample is adopted as-is, otherwise the filter would take dozens
+ * of readings to reach the real level starting from zero. */
+static void test_ema_adopts_the_first_sample(void)
 {
     hb_ema_t f;
     hb_ema_init(&f, 0.25f);
@@ -269,15 +271,15 @@ static void test_ema_converge(void)
     CHECK_EQ_INT(hb_ema_value(&f), 1000);
 }
 
-/* Réactivité de la constante de production : un pas (tirer) comme un relâcher
- * doivent être suivis en quelques échantillons, sinon le frein à main se sent
- * « mou ». 90 % en 4 échantillons, soit 50 ms à 80 échantillons/s. */
-static void test_ema_reactivite_constante_production(void)
+/* Responsiveness of the production constant: a step (pulling) and a release
+ * must both be followed within a few samples, otherwise the handbrake feels
+ * "mushy". 90% in 4 samples, i.e. 50 ms at 80 samples/s. */
+static void test_ema_reactive_constant_production(void)
 {
     hb_ema_t f;
     int      i;
 
-    /* Tirer : 0 → 100000 */
+    /* Pull: 0 -> 100000 */
     hb_ema_init(&f, HB_EMA_ALPHA);
     hb_ema_push(&f, 0);
     for (i = 0; i < 4; i++) {
@@ -285,7 +287,7 @@ static void test_ema_reactivite_constante_production(void)
     }
     CHECK(hb_ema_value(&f) >= 90000);
 
-    /* Relâcher : 100000 → 0, même budget en temps */
+    /* Release: 100000 -> 0, same time budget */
     hb_ema_init(&f, HB_EMA_ALPHA);
     hb_ema_push(&f, 100000);
     for (i = 0; i < 4; i++) {
@@ -294,21 +296,21 @@ static void test_ema_reactivite_constante_production(void)
     CHECK(hb_ema_value(&f) <= 10000);
 }
 
-static void test_ema_lisse_le_bruit(void)
+static void test_ema_smooths_noise(void)
 {
     hb_ema_t f;
     int      i;
 
     hb_ema_init(&f, 0.25f);
     hb_ema_push(&f, 1000);
-    /* Bruit symétrique : la sortie doit rester proche du niveau réel */
+    /* Symmetric noise: the output must stay close to the real level */
     for (i = 0; i < 100; i++) {
         hb_ema_push(&f, (i % 2 == 0) ? 1050 : 950);
     }
     CHECK(hb_ema_value(&f) > 970 && hb_ema_value(&f) < 1030);
 }
 
-static void test_ema_gere_les_valeurs_negatives(void)
+static void test_ema_handles_negative_values(void)
 {
     hb_ema_t f;
     int      i;
@@ -321,7 +323,7 @@ static void test_ema_gere_les_valeurs_negatives(void)
     CHECK_EQ_INT(hb_ema_value(&f), -2000);
 }
 
-static void test_ema_alpha_invalide_devient_transparent(void)
+static void test_ema_invalid_alpha_becomes_transparent(void)
 {
     hb_ema_t f;
 
@@ -403,36 +405,36 @@ static void test_stuck_with_negative_values(void)
 
 int main(void)
 {
-    RUN(test_normalize_plage_normale);
-    RUN(test_normalize_borne_hors_plage);
-    RUN(test_normalize_plage_inversee);
-    RUN(test_normalize_plage_nulle);
-    RUN(test_normalize_valeurs_negatives);
+    RUN(test_normalize_normal_range);
+    RUN(test_normalize_clamps_out_of_range);
+    RUN(test_normalize_inverted_range);
+    RUN(test_normalize_zero_range);
+    RUN(test_normalize_negative_values);
 
-    RUN(test_courbe_lineaire);
-    RUN(test_courbe_puissance);
-    RUN(test_courbe_s);
-    RUN(test_gamma_un_neutralise_les_courbes);
-    RUN(test_courbes_sont_monotones);
-    RUN(test_courbe_inconnue_retombe_en_lineaire);
-    RUN(test_courbe_borne_son_entree);
+    RUN(test_curve_linear);
+    RUN(test_curve_power);
+    RUN(test_curve_s);
+    RUN(test_gamma_one_neutralizes_curves);
+    RUN(test_curves_are_monotonic);
+    RUN(test_unknown_curve_falls_back_to_linear);
+    RUN(test_curve_clamps_its_input);
 
-    RUN(test_axe_hid);
+    RUN(test_hid_axis);
 
-    RUN(test_config_par_defaut);
-    RUN(test_defaut_non_calibre_bouge_a_peine);
-    RUN(test_sanitize_borne_gamma);
-    RUN(test_sanitize_rattrape_nan);
-    RUN(test_sanitize_borne_courbe_et_plage);
+    RUN(test_config_defaults);
+    RUN(test_default_uncalibrated_barely_moves);
+    RUN(test_sanitize_clamps_gamma);
+    RUN(test_sanitize_recovers_nan);
+    RUN(test_sanitize_clamps_curve_and_range);
 
-    RUN(test_process_bout_en_bout);
+    RUN(test_process_end_to_end);
 
-    RUN(test_ema_adopte_le_premier_echantillon);
+    RUN(test_ema_adopts_the_first_sample);
     RUN(test_ema_converge);
-    RUN(test_ema_reactivite_constante_production);
-    RUN(test_ema_lisse_le_bruit);
-    RUN(test_ema_gere_les_valeurs_negatives);
-    RUN(test_ema_alpha_invalide_devient_transparent);
+    RUN(test_ema_reactive_constant_production);
+    RUN(test_ema_smooths_noise);
+    RUN(test_ema_handles_negative_values);
+    RUN(test_ema_invalid_alpha_becomes_transparent);
     RUN(test_stuck_detects_a_frozen_value);
     RUN(test_stuck_recovers_on_a_different_value);
     RUN(test_stuck_change_before_threshold_restarts_timer);

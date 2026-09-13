@@ -1,8 +1,8 @@
 /*
- * hb_core — logique de traitement du handbrake.
+ * hb_core - handbrake processing logic.
  *
- * C99 pur, sans dépendance Arduino : ce fichier est compilé à l'identique par
- * le compilateur AVR et par les tests natifs (tests/).
+ * Pure C99, no Arduino dependency: this file compiles identically with the
+ * AVR compiler and with the native tests (tests/).
  */
 #ifndef HB_CORE_H
 #define HB_CORE_H
@@ -13,17 +13,17 @@
 extern "C" {
 #endif
 
-/* Plage de l'axe HID transmis à l'hôte. */
+/* Range of the HID axis sent to the host. */
 #define HB_AXIS_MIN 0
 #define HB_AXIS_MAX 1023
 
-/* Bornes du paramètre de courbe. Au-delà, la courbe devient inexploitable
- * (plateau quasi total à une extrémité) sans rien apporter. */
+/* Bounds of the curve parameter. Beyond them the curve becomes unusable
+ * (a near-total plateau at one end) and buys nothing. */
 #define HB_GAMMA_MIN 0.10f
 #define HB_GAMMA_MAX 5.00f
 
-/* Plage par défaut, EEPROM vierge : volontairement très large pour que l'axe
- * bouge à peine, ce qui rend l'absence de calibration évidente. */
+/* Default range, blank EEPROM: deliberately very wide so the axis barely
+ * moves, which makes the absence of calibration obvious. */
 #define HB_DEFAULT_RAW_MIN 0L
 #define HB_DEFAULT_RAW_MAX 8000000L
 
@@ -34,14 +34,14 @@ typedef enum {
 } hb_curve_t;
 
 typedef struct {
-    int32_t raw_min;    /* lecture brute, levier au repos */
-    int32_t raw_max;    /* lecture brute, force maximale voulue */
+    int32_t raw_min;    /* raw reading, lever at rest */
+    int32_t raw_max;    /* raw reading, desired maximum force */
     uint8_t curve;      /* hb_curve_t */
-    float   gamma;      /* paramètre de courbe, ignoré si LINEAR */
-    uint8_t calibrated; /* 0 tant que l'utilisateur n'a pas calibré */
+    float   gamma;      /* curve parameter, ignored if LINEAR */
+    uint8_t calibrated; /* 0 until the user has calibrated */
 } hb_config_t;
 
-/* Filtre exponentiel : une valeur d'état, pas de tampon circulaire. */
+/* Exponential filter: a state value, not a circular buffer. */
 typedef struct {
     float   alpha;
     float   value;
@@ -52,30 +52,30 @@ typedef struct {
 
 void hb_config_defaults(hb_config_t *cfg);
 
-/* Ramène les champs hors bornes dans le domaine valide. Renvoie 1 si quelque
- * chose a été corrigé. Appliqué après chargement EEPROM et après toute
- * commande de configuration. */
+/* Brings out-of-bounds fields back into the valid domain. Returns 1 if
+ * anything was corrected. Applied after an EEPROM load and after every
+ * configuration command. */
 int hb_config_sanitize(hb_config_t *cfg);
 
-/* --- Traitement du signal ---------------------------------------------- */
+/* --- Signal processing -------------------------------------------------- */
 
-/* Position dans la plage calibrée, bornée à [0,1].
+/* Position within the calibrated range, clamped to [0,1].
  *
- * Fonctionne aussi quand raw_max < raw_min (cellule câblée en polarité
- * inverse) : le signe s'annule. raw_min == raw_max renvoie 0. */
+ * Also works when raw_max < raw_min (cell wired with reversed polarity):
+ * the signs cancel. raw_min == raw_max returns 0. */
 float hb_normalize(int32_t raw, int32_t raw_min, int32_t raw_max);
 
-/* Applique la courbe de réponse. t et le retour sont dans [0,1].
- * gamma == 1 rend les trois courbes identiques à LINEAR. */
+/* Applies the response curve. t and the return value are in [0,1].
+ * gamma == 1 makes the three curves identical to LINEAR. */
 float hb_curve_apply(uint8_t curve, float gamma, float t);
 
-/* Chaîne complète : brut filtré -> sortie [0,1]. */
+/* Full chain: filtered raw -> [0,1] output. */
 float hb_process(const hb_config_t *cfg, int32_t raw);
 
-/* Sortie [0,1] -> valeur d'axe HID entière, bornée. */
+/* [0,1] output -> bounded integer HID axis value. */
 uint16_t hb_axis_from_unit(float unit);
 
-/* --- Filtre ------------------------------------------------------------ */
+/* --- Filter ------------------------------------------------------------- */
 
 void    hb_ema_init(hb_ema_t *f, float alpha);
 void    hb_ema_reset(hb_ema_t *f);

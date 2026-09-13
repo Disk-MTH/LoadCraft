@@ -7,25 +7,24 @@ HX711::HX711(uint8_t pin_data, uint8_t pin_clock, uint8_t gain_pulses)
 
 void HX711::begin()
 {
-    /* Pull-up sur la ligne de données : capteur absent ou mal câblé, la
-     * broche est lue au niveau haut, donc « pas de conversion prête », et
-     * l'absence est signalée franchement. Sans lui, l'entrée flotte et peut
-     * se lire au niveau bas au hasard : le firmware lirait alors 24 bits de
-     * bruit et les présenterait comme une mesure.
+    /* Pull-up on the data line: sensor absent or miswired, the pin reads
+     * high, i.e. "no conversion ready", and the absence is reported cleanly.
+     * Without it, the input floats and can read low at random: the firmware
+     * would then read 24 bits of noise and present them as a measurement.
      *
-     * La sortie DOUT du HX711 est de type push-pull : elle impose son niveau
-     * sans difficulté face au pull-up interne de l'AVR (20 à 50 kΩ). */
+     * The HX711 DOUT output is push-pull: it imposes its level without
+     * trouble against the AVR's internal pull-up (20 to 50 kohms). */
     pinMode(_pin_data, INPUT_PULLUP);
     pinMode(_pin_clock, OUTPUT);
 
-    /* Horloge basse : une impulsion maintenue haut plus de 60 µs met le HX711
-     * en veille. On sort de cet état en la ramenant à zéro. */
+    /* Clock low: a pulse held high for more than 60us puts the HX711 to
+     * sleep. Leaving that state means bringing it back to zero. */
     digitalWrite(_pin_clock, LOW);
 }
 
 bool HX711::available() const
 {
-    /* Le HX711 signale une conversion prête en tirant DOUT au niveau bas. */
+    /* The HX711 signals a ready conversion by pulling DOUT low. */
     return digitalRead(_pin_data) == LOW;
 }
 
@@ -38,17 +37,17 @@ bool HX711::read(int32_t &out)
     uint32_t value = 0;
 
     /*
-     * Interruptions coupées pendant toute la trame.
+     * Interrupts off for the whole frame.
      *
-     * Le HX711 se met en veille si son horloge reste haute plus de 60 µs. Sur
-     * un 32u4, l'interruption USB se déclenche à chaque milliseconde et peut
-     * durer plusieurs dizaines de microsecondes : si elle tombe entre deux
-     * fronts, elle étire l'impulsion et provoque une mise en veille en plein
-     * milieu de la lecture, donc un échantillon corrompu.
+     * The HX711 goes to sleep if its clock stays high for more than 60us.
+     * On a 32u4, the USB interrupt fires every millisecond and can last
+     * several tens of microseconds: if it lands between two edges, it
+     * stretches the pulse and triggers a sleep right in the middle of the
+     * read, hence a corrupted sample.
      *
-     * La trame complète dure environ 200 µs, soit moins de 2 % du temps à
-     * 80 échantillons/s. Le contrôleur USB tamponne en matériel et ne perd
-     * rien sur cette durée.
+     * The full frame lasts about 200us, i.e. less than 2% of the time at
+     * 80 samples/s. The USB controller buffers in hardware and loses
+     * nothing over that span.
      */
     noInterrupts();
 
@@ -58,8 +57,8 @@ bool HX711::read(int32_t &out)
         value = (value << 1) | (uint32_t)(digitalRead(_pin_data) == HIGH);
     }
 
-    /* Impulsions supplémentaires : elles fixent le canal et le gain de la
-     * conversion suivante (25 = A/128, 26 = B/32, 27 = A/64). */
+    /* Extra pulses: they set the channel and gain of the next conversion
+     * (25 = A/128, 26 = B/32, 27 = A/64). */
     for (uint8_t i = 24; i < _gain_pulses; i++) {
         digitalWrite(_pin_clock, HIGH);
         digitalWrite(_pin_clock, LOW);
@@ -67,8 +66,8 @@ bool HX711::read(int32_t &out)
 
     interrupts();
 
-    /* Complément à deux sur 24 bits : le bit 23 est le bit de signe, il faut
-     * l'étendre aux 8 bits de poids fort pour obtenir un int32 correct. */
+    /* Two's complement on 24 bits: bit 23 is the sign bit, it must be
+     * extended into the top 8 bits to get a correct int32. */
     if (value & 0x800000UL) {
         value |= 0xFF000000UL;
     }

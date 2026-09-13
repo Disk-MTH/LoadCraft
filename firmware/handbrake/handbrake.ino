@@ -1,14 +1,14 @@
 /*
- * Handbrake progressif USB — firmware ATmega32u4 (Pro Micro).
+ * USB progressive handbrake - firmware ATmega32u4 (Pro Micro).
  *
- * Le PC voit un joystick USB HID à un axe, plus un port série virtuel pour la
- * configuration. Aucun logiciel n'a besoin de tourner pendant le jeu : la
- * calibration vit en EEPROM.
+ * The PC sees a one-axis USB HID joystick, plus a virtual serial port for
+ * configuration. No software needs to run during the game: the calibration
+ * lives in EEPROM.
  *
- * Dépendance : bibliothèque Joystick de MHeironimus
+ * Dependency: MHeironimus Joystick library
  *   https://github.com/MHeironimus/ArduinoJoystickLibrary
  *
- * Voir docs/design.md pour la conception et docs/wiring.md pour le câblage.
+ * See docs/design.md for the design and docs/wiring.md for the wiring.
  */
 
 #include <Joystick.h>
@@ -19,15 +19,15 @@
 #include "hb_storage.h"
 #include "hx711.h"
 
-/* Un seul axe X. Tout le reste est retiré du descripteur HID : rapport plus
- * court et meilleure compatibilité hôte. */
+/* A single X axis. Everything else is removed from the HID descriptor:
+ * shorter report and better host compatibility. */
 static Joystick_ joystick(JOYSTICK_DEFAULT_REPORT_ID, JOYSTICK_TYPE_JOYSTICK,
-                          0,                          /* boutons */
+                          0,                          /* buttons */
                           0,                          /* hat switches */
                           true, HB_JOYSTICK_ENABLE_Y, /* X, Y */
                           false, false, false, false, /* Z, Rx, Ry, Rz */
                           false, false,               /* rudder, throttle */
-                          false, false, false); /* accel, frein, direction */
+                          false, false, false); /* accel, brake, steer */
 
 static HX711 sensor(HB_PIN_HX711_DT, HB_PIN_HX711_SCK, HB_HX711_GAIN_PULSES);
 
@@ -44,18 +44,18 @@ static uint32_t last_sample_ms = 0;
 static uint32_t last_report_ms = 0;
 static uint32_t last_telem_ms  = 0;
 
-/* Les toutes premières conversions suivant la mise sous tension sortent avant
- * que l'étage d'entrée du HX711 ne soit stabilisé. Les ignorer évite qu'un
- * « SET MIN » lancé trop tôt ne fige une calibration fausse. */
+/* The very first conversions after power-up come out before the HX711 input
+ * stage has settled. Skipping them prevents a "SET MIN" issued too early
+ * from freezing a bad calibration. */
 static const uint8_t WARMUP_SAMPLES = 8;
 static uint8_t       warmup_left    = WARMUP_SAMPLES;
 
-/* --- Sorties ------------------------------------------------------------ */
+/* --- Outputs ------------------------------------------------------------ */
 
 static void reply(const char *text)
 {
-    /* Écrire alors qu'aucun hôte n'a ouvert le port remplirait le tampon CDC
-     * et finirait par bloquer la boucle, donc l'axe HID avec elle. */
+    /* Writing while no host has opened the port would fill the CDC buffer
+     * and eventually block the loop, and with it the HID axis. */
     if (Serial) {
         Serial.println(text);
     }
@@ -75,8 +75,8 @@ static void update_axis()
     uint16_t axis = hb_axis_from_unit(unit);
     uint32_t now  = millis();
 
-    /* Rapport envoyé au changement, et sinon périodiquement pour garder
-     * l'hôte en phase même levier immobile. */
+    /* Report sent on change, and periodically otherwise to keep the host in
+     * step even with the lever idle. */
     if (axis != last_axis || (now - last_report_ms) >= HB_HID_KEEPALIVE_MS) {
         joystick.setXAxis((int)axis);
         joystick.sendState();
@@ -96,7 +96,7 @@ static void send_telemetry()
     }
 }
 
-/* --- Commandes ---------------------------------------------------------- */
+/* --- Commands ----------------------------------------------------------- */
 
 static void ack(const char *what)
 {
@@ -132,8 +132,8 @@ static void apply_command(const hb_cmd_t &cmd)
         } else if (have_sample) {
             value = filtered_raw;
         } else {
-            /* Capturer sans lecture valide figerait un zéro faux, que rien
-             * ne signalerait ensuite à l'utilisateur. */
+            /* Capturing without a valid reading would freeze a bogus zero
+             * that nothing would then tell the user about. */
             reply("ERR no sensor reading");
             break;
         }
@@ -166,9 +166,9 @@ static void apply_command(const hb_cmd_t &cmd)
         break;
 
     case HB_CMD_SAVE:
-        /* L'écriture n'a lieu que sur demande explicite : un curseur de gamma
-         * qui sauvegarderait à chaque mouvement userait l'EEPROM en quelques
-         * séances de réglage. */
+        /* Writing only happens on explicit request: a gamma slider that
+         * saved on every move would wear the EEPROM out in a few tuning
+         * sessions. */
         hb_storage_save(config);
         ack("SAVE");
         break;
@@ -204,8 +204,8 @@ static void poll_serial()
         }
 
         if (line.overflow) {
-            /* Exécuter une ligne tronquée reviendrait à obéir à une commande
-             * que personne n'a envoyée. */
+            /* Executing a truncated line would be obeying a command nobody
+             * sent. */
             reply("ERR line too long");
             continue;
         }
@@ -260,7 +260,7 @@ static void poll_sensor()
 
 void setup()
 {
-    Serial.begin(115200); /* débit ignoré sur CDC, présent par convention */
+    Serial.begin(115200); /* rate ignored on CDC, present by convention */
 
     hb_storage_load(config);
     hb_ema_init(&filter, HB_EMA_ALPHA);
@@ -270,8 +270,8 @@ void setup()
     sensor.begin();
     last_sample_ms = millis();
 
-    /* begin(false) : l'état est transmis par sendState() explicite, en un
-     * rapport atomique, jamais partiellement mis à jour. */
+    /* begin(false): state is sent by an explicit sendState(), as one atomic
+     * report, never partially updated. */
     joystick.setXAxisRange(HB_AXIS_MIN, HB_AXIS_MAX);
     joystick.begin(false);
 

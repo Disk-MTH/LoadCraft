@@ -1,13 +1,13 @@
 /*
- * hb_record — sérialisation de la configuration persistante.
+ * hb_record - serialization of the persistent configuration.
  *
- * Séparé de hb_storage pour rester du C99 pur et donc testable nativement :
- * la détection de corruption est précisément le genre de logique qui casse
- * sans bruit et ne se remarque qu'une fois la calibration perdue.
+ * Kept separate from hb_storage to stay pure C99 and therefore natively
+ * testable: corruption detection is precisely the kind of logic that breaks
+ * silently and is only noticed once the calibration is gone.
  *
- * Disposition explicitement petit-boutiste, indépendante du compilateur : pas
- * de struct écrite telle quelle, donc pas de surprise de bourrage ou
- * d'alignement entre la cible AVR et la machine de test.
+ * Explicitly little-endian layout, compiler-independent: no struct written
+ * as-is, so no padding or alignment surprise between the AVR target and the
+ * test machine.
  */
 #ifndef HB_RECORD_H
 #define HB_RECORD_H
@@ -25,16 +25,16 @@ extern "C" {
 #define HB_RECORD_VERSION 1
 #define HB_RECORD_SIZE    22
 
-/* Sérialise cfg dans un tampon d'exactement HB_RECORD_SIZE octets, CRC
- * compris. */
+/* Serializes cfg into a buffer of exactly HB_RECORD_SIZE bytes, CRC
+ * included. */
 void hb_record_pack(uint8_t *buf, const hb_config_t *cfg);
 
-/* Désérialise. Renvoie 1 si le magic, la version et le CRC concordent, et
- * remplit alors cfg (déjà validé par hb_config_sanitize). Renvoie 0 sinon,
- * sans toucher à cfg. */
+/* Deserializes. Returns 1 if the magic, the version and the CRC match, and
+ * fills cfg then (already validated by hb_config_sanitize). Returns 0
+ * otherwise, leaving cfg untouched. */
 int hb_record_unpack(const uint8_t *buf, hb_config_t *cfg);
 
-/* CRC-16/CCITT-FALSE (polynôme 0x1021, valeur initiale 0xFFFF). */
+/* CRC-16/CCITT-FALSE (polynomial 0x1021, initial value 0xFFFF). */
 uint16_t hb_crc16(const uint8_t *data, size_t len);
 
 #ifdef __cplusplus

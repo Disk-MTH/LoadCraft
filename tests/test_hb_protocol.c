@@ -8,9 +8,9 @@ static hb_cmd_t parse(const char *line)
     return cmd;
 }
 
-/* --- Commandes sans argument -------------------------------------------- */
+/* --- Commands without argument ------------------------------------------ */
 
-static void test_commandes_simples(void)
+static void test_simple_commands(void)
 {
     CHECK_EQ_INT(parse("PING").kind, HB_CMD_PING);
     CHECK_EQ_INT(parse("GET").kind, HB_CMD_GET);
@@ -19,23 +19,23 @@ static void test_commandes_simples(void)
     CHECK_EQ_INT(parse("RESET").kind, HB_CMD_RESET);
 }
 
-static void test_insensible_a_la_casse(void)
+static void test_case_insensitive(void)
 {
     CHECK_EQ_INT(parse("ping").kind, HB_CMD_PING);
     CHECK_EQ_INT(parse("PiNg").kind, HB_CMD_PING);
     CHECK_EQ_INT(parse("set curve power 2.0").kind, HB_CMD_SET_CURVE);
 }
 
-static void test_espaces_ignores(void)
+static void test_spaces_ignored(void)
 {
     CHECK_EQ_INT(parse("   PING").kind, HB_CMD_PING);
     CHECK_EQ_INT(parse("\tGET\t").kind, HB_CMD_GET);
     CHECK_EQ_INT(parse("SET    MIN     1234").kind, HB_CMD_SET_MIN);
 }
 
-/* Une ligne vide n'est pas une commande inconnue : elle ne doit provoquer
- * aucune réponse, sinon un simple appui sur Entrée génère une erreur. */
-static void test_ligne_vide(void)
+/* An empty line is not an unknown command: it must not trigger any reply,
+ * otherwise a simple Enter press would generate an error. */
+static void test_empty_line(void)
 {
     hb_cmd_t cmd;
     CHECK_EQ_INT(hb_parse_command("", &cmd), 0);
@@ -43,7 +43,7 @@ static void test_ligne_vide(void)
     CHECK_EQ_INT(hb_parse_command("\t \t", &cmd), 0);
 }
 
-static void test_commande_inconnue(void)
+static void test_unknown_command(void)
 {
     CHECK_EQ_INT(parse("BLAH").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("PIN").kind, HB_CMD_UNKNOWN);
@@ -65,7 +65,7 @@ static void test_stream(void)
     CHECK_EQ_INT(off.ivalue, 0);
 }
 
-static void test_stream_invalide(void)
+static void test_stream_invalid(void)
 {
     CHECK_EQ_INT(parse("STREAM").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("STREAM 2").kind, HB_CMD_UNKNOWN);
@@ -75,9 +75,9 @@ static void test_stream_invalide(void)
 
 /* --- SET MIN / SET MAX --------------------------------------------------- */
 
-/* Sans argument : capture la valeur filtrée courante. C'est le mode utilisé
- * par les boutons de l'app. */
-static void test_set_min_max_sans_argument(void)
+/* Without argument: capture the current filtered value. This is the mode
+ * used by the app's buttons. */
+static void test_set_min_max_without_argument(void)
 {
     hb_cmd_t mn = parse("SET MIN");
     hb_cmd_t mx = parse("SET MAX");
@@ -88,7 +88,7 @@ static void test_set_min_max_sans_argument(void)
     CHECK_EQ_INT(mx.has_value, 0);
 }
 
-static void test_set_min_max_avec_argument(void)
+static void test_set_min_max_with_argument(void)
 {
     hb_cmd_t mn  = parse("SET MIN 123456");
     hb_cmd_t mx  = parse("SET MAX -98765");
@@ -102,10 +102,10 @@ static void test_set_min_max_avec_argument(void)
     CHECK_EQ_INT(mx.ivalue, -98765);
 }
 
-/* Un argument illisible doit être rejeté, pas silencieusement traité comme
- * une capture de la valeur courante : l'utilisateur perdrait sa calibration
- * sans comprendre pourquoi. */
-static void test_set_min_argument_invalide_rejete(void)
+/* An unreadable argument must be rejected, not silently treated as a
+ * capture of the current value: the user would lose their calibration
+ * without understanding why. */
+static void test_set_min_invalid_argument_rejected(void)
 {
     CHECK_EQ_INT(parse("SET MIN abc").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("SET MIN 12abc").kind, HB_CMD_UNKNOWN);
@@ -131,7 +131,7 @@ static void test_set_curve(void)
     CHECK_EQ_INT(scv.curve, HB_CURVE_SCURVE);
 }
 
-static void test_set_curve_avec_gamma(void)
+static void test_set_curve_with_gamma(void)
 {
     hb_cmd_t cmd = parse("SET CURVE POWER 1.8");
 
@@ -141,7 +141,7 @@ static void test_set_curve_avec_gamma(void)
     CHECK_NEAR(cmd.fvalue, 1.8f, 1e-5);
 }
 
-static void test_set_curve_invalide(void)
+static void test_set_curve_invalid(void)
 {
     CHECK_EQ_INT(parse("SET CURVE").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("SET CURVE PARABOLE").kind, HB_CMD_UNKNOWN);
@@ -161,16 +161,16 @@ static void test_set_gamma(void)
     CHECK_NEAR(parse("SET GAMMA 1").fvalue, 1.0f, 1e-5);
 }
 
-static void test_set_gamma_invalide(void)
+static void test_set_gamma_invalid(void)
 {
     CHECK_EQ_INT(parse("SET GAMMA").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("SET GAMMA abc").kind, HB_CMD_UNKNOWN);
     CHECK_EQ_INT(parse("SET GAMMA 1.5 2").kind, HB_CMD_UNKNOWN);
 }
 
-/* --- Noms de courbes ----------------------------------------------------- */
+/* --- Curve names --------------------------------------------------------- */
 
-static void test_noms_de_courbes(void)
+static void test_curve_names(void)
 {
     uint8_t c;
 
@@ -186,9 +186,10 @@ static void test_noms_de_courbes(void)
     CHECK_EQ_INT(hb_curve_from_name("nope", &c), 0);
 }
 
-/* Tout nom rendu par hb_curve_name doit être relu par hb_curve_from_name :
- * sinon un GET produirait une configuration que l'app ne sait pas renvoyer. */
-static void test_aller_retour_des_noms_de_courbes(void)
+/* Every name returned by hb_curve_name must be readable back by
+ * hb_curve_from_name: otherwise a GET would produce a configuration the
+ * app cannot send back. */
+static void test_curve_names_round_trip(void)
 {
     uint8_t i;
     for (i = 0; i <= HB_CURVE_SCURVE; i++) {
@@ -198,10 +199,10 @@ static void test_aller_retour_des_noms_de_courbes(void)
     }
 }
 
-/* --- Formatage des flottants --------------------------------------------- */
+/* --- Float formatting ---------------------------------------------------- */
 
-/* avr-libc n'implémente pas %f dans printf : ce formateur maison est la seule
- * voie de sortie pour un flottant côté firmware. */
+/* avr-libc does not implement %f in printf: this home-grown formatter is
+ * the only way out for a float on the firmware side. */
 static void test_fmt_fixed(void)
 {
     char buf[16];
@@ -228,19 +229,19 @@ static void test_fmt_fixed(void)
     CHECK_STR(buf, "42");
 }
 
-static void test_fmt_fixed_negatifs(void)
+static void test_fmt_fixed_negatives(void)
 {
     char buf[16];
 
     hb_fmt_fixed(buf, sizeof buf, -1.5f, 3);
     CHECK_STR(buf, "-1.500");
 
-    /* Pas de "-0.000" : un zéro reste un zéro une fois arrondi. */
+    /* No "-0.000": a zero stays a zero once rounded. */
     hb_fmt_fixed(buf, sizeof buf, -0.0001f, 3);
     CHECK_STR(buf, "0.000");
 }
 
-static void test_fmt_fixed_arrondi(void)
+static void test_fmt_fixed_rounding(void)
 {
     char buf[16];
 
@@ -251,18 +252,18 @@ static void test_fmt_fixed_arrondi(void)
     CHECK_STR(buf, "0.001");
 }
 
-static void test_fmt_fixed_tampon_trop_petit(void)
+static void test_fmt_fixed_buffer_too_small(void)
 {
     char buf[4];
 
     CHECK_EQ_INT(hb_fmt_fixed(buf, sizeof buf, 1.234f, 3), 0);
-    CHECK_STR(buf, ""); /* rien de tronqué : chaîne vide plutôt que "1.2" */
+    CHECK_STR(buf, ""); /* nothing truncated: empty string rather than "1.2" */
     CHECK_EQ_INT(hb_fmt_fixed(buf, 0, 1.0f, 3), 0);
 }
 
-/* Une valeur non finie issue d'une EEPROM corrompue ne doit jamais produire
- * une ligne que l'app n'arrive pas à analyser. */
-static void test_fmt_fixed_valeur_non_finie(void)
+/* A non-finite value coming from a corrupted EEPROM must never produce a
+ * line the app cannot parse. */
+static void test_fmt_fixed_non_finite_value(void)
 {
     char buf[16];
 
@@ -276,7 +277,7 @@ static void test_fmt_fixed_valeur_non_finie(void)
     CHECK_STR(buf, "0.000");
 }
 
-/* --- Formatage des réponses ---------------------------------------------- */
+/* --- Reply formatting ---------------------------------------------------- */
 
 static void test_format_config(void)
 {
@@ -295,9 +296,9 @@ static void test_format_config(void)
               "CFG min=12345 max=987654 curve=POWER gamma=1.800 calibrated=1");
 }
 
-/* HB_REPLY_MAX doit couvrir le pire cas, sinon la réponse serait tronquée
- * silencieusement au moment le moins pratique. */
-static void test_format_config_pire_cas(void)
+/* HB_REPLY_MAX must cover the worst case, otherwise the reply would be
+ * silently truncated at the least convenient moment. */
+static void test_format_config_worst_case(void)
 {
     hb_config_t cfg;
     char        buf[HB_REPLY_MAX];
@@ -324,7 +325,7 @@ static void test_format_telemetry(void)
 
 /* s=0 : no valid sample (stuck sensor or sensor-absent timeout). Old hosts
  * ignore the field; the host parser defaults a missing s to 1. */
-static void test_format_telemetry_sans_capteur(void)
+static void test_format_telemetry_without_sensor(void)
 {
     char buf[HB_REPLY_MAX];
 
@@ -332,7 +333,7 @@ static void test_format_telemetry_sans_capteur(void)
     CHECK_STR(buf, "T raw=123456 out=0.000 axis=0 s=0");
 }
 
-static void test_format_tampon_trop_petit(void)
+static void test_format_buffer_too_small(void)
 {
     hb_config_t cfg;
     char        buf[8];
@@ -344,7 +345,7 @@ static void test_format_tampon_trop_petit(void)
     CHECK_STR(buf, "");
 }
 
-/* --- Accumulation de ligne ------------------------------------------------ */
+/* --- Line accumulation --------------------------------------------------- */
 
 static int push_str(hb_linebuf_t *lb, const char *s)
 {
@@ -355,7 +356,7 @@ static int push_str(hb_linebuf_t *lb, const char *s)
     return done;
 }
 
-static void test_linebuf_ligne_simple(void)
+static void test_linebuf_simple_line(void)
 {
     hb_linebuf_t lb;
     hb_linebuf_init(&lb);
@@ -374,9 +375,9 @@ static void test_linebuf_crlf(void)
     CHECK_STR(lb.buf, "GET");
 }
 
-/* Le tampon se réarme seul : l'appelant n'a pas à penser à le réinitialiser
- * entre deux commandes. */
-static void test_linebuf_se_rearme(void)
+/* The buffer re-arms itself: the caller does not have to think about
+ * resetting it between two commands. */
+static void test_linebuf_resets_itself(void)
 {
     hb_linebuf_t lb;
     hb_linebuf_init(&lb);
@@ -388,7 +389,7 @@ static void test_linebuf_se_rearme(void)
     CHECK_EQ_INT(lb.len, 3);
 }
 
-static void test_linebuf_ligne_vide(void)
+static void test_linebuf_empty_line(void)
 {
     hb_linebuf_t lb;
     hb_linebuf_init(&lb);
@@ -397,9 +398,9 @@ static void test_linebuf_ligne_vide(void)
     CHECK_STR(lb.buf, "");
 }
 
-/* Une ligne trop longue est signalée plutôt qu'exécutée tronquée : sinon
- * "SET MIN 123456789…" pourrait devenir un "SET MIN" involontaire. */
-static void test_linebuf_depassement(void)
+/* A line that is too long is flagged rather than executed truncated:
+ * otherwise "SET MIN 123456789..." could become an unintended "SET MIN". */
+static void test_linebuf_overflow(void)
 {
     hb_linebuf_t lb;
     int          i;
@@ -412,7 +413,7 @@ static void test_linebuf_depassement(void)
     CHECK_EQ_INT(lb.overflow, 1);
     CHECK(lb.len < HB_LINE_MAX);
 
-    /* Le dépassement ne colle pas à la ligne suivante */
+    /* The overflow does not stick to the next line */
     CHECK_EQ_INT(push_str(&lb, "PING\n"), 1);
     CHECK_EQ_INT(lb.overflow, 0);
     CHECK_STR(lb.buf, "PING");
@@ -420,46 +421,46 @@ static void test_linebuf_depassement(void)
 
 int main(void)
 {
-    RUN(test_commandes_simples);
-    RUN(test_insensible_a_la_casse);
-    RUN(test_espaces_ignores);
-    RUN(test_ligne_vide);
-    RUN(test_commande_inconnue);
+    RUN(test_simple_commands);
+    RUN(test_case_insensitive);
+    RUN(test_spaces_ignored);
+    RUN(test_empty_line);
+    RUN(test_unknown_command);
 
     RUN(test_stream);
-    RUN(test_stream_invalide);
+    RUN(test_stream_invalid);
 
-    RUN(test_set_min_max_sans_argument);
-    RUN(test_set_min_max_avec_argument);
-    RUN(test_set_min_argument_invalide_rejete);
+    RUN(test_set_min_max_without_argument);
+    RUN(test_set_min_max_with_argument);
+    RUN(test_set_min_invalid_argument_rejected);
 
     RUN(test_set_curve);
-    RUN(test_set_curve_avec_gamma);
-    RUN(test_set_curve_invalide);
+    RUN(test_set_curve_with_gamma);
+    RUN(test_set_curve_invalid);
 
     RUN(test_set_gamma);
-    RUN(test_set_gamma_invalide);
+    RUN(test_set_gamma_invalid);
 
-    RUN(test_noms_de_courbes);
-    RUN(test_aller_retour_des_noms_de_courbes);
+    RUN(test_curve_names);
+    RUN(test_curve_names_round_trip);
 
     RUN(test_fmt_fixed);
-    RUN(test_fmt_fixed_negatifs);
-    RUN(test_fmt_fixed_arrondi);
-    RUN(test_fmt_fixed_tampon_trop_petit);
-    RUN(test_fmt_fixed_valeur_non_finie);
+    RUN(test_fmt_fixed_negatives);
+    RUN(test_fmt_fixed_rounding);
+    RUN(test_fmt_fixed_buffer_too_small);
+    RUN(test_fmt_fixed_non_finite_value);
 
     RUN(test_format_config);
-    RUN(test_format_config_pire_cas);
+    RUN(test_format_config_worst_case);
     RUN(test_format_telemetry);
-    RUN(test_format_telemetry_sans_capteur);
-    RUN(test_format_tampon_trop_petit);
+    RUN(test_format_telemetry_without_sensor);
+    RUN(test_format_buffer_too_small);
 
-    RUN(test_linebuf_ligne_simple);
+    RUN(test_linebuf_simple_line);
     RUN(test_linebuf_crlf);
-    RUN(test_linebuf_se_rearme);
-    RUN(test_linebuf_ligne_vide);
-    RUN(test_linebuf_depassement);
+    RUN(test_linebuf_resets_itself);
+    RUN(test_linebuf_empty_line);
+    RUN(test_linebuf_overflow);
 
     TEST_SUMMARY("hb_protocol");
 }

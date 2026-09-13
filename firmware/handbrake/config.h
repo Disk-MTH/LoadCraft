@@ -1,43 +1,44 @@
 /*
- * Brochage et constantes de réglage.
- * Voir docs/wiring.md pour le schéma de câblage correspondant.
+ * Pinout and tuning constants.
+ * See docs/wiring.md for the corresponding wiring diagram.
  */
 #ifndef HB_BOARD_CONFIG_H
 #define HB_BOARD_CONFIG_H
 
-/* --- Brochage HX711 ----------------------------------------------------- */
+/* --- HX711 pinout ------------------------------------------------------- */
 
 #define HB_PIN_HX711_DT  4
 #define HB_PIN_HX711_SCK 5
 
 /* --- Acquisition -------------------------------------------------------- */
 
-/* Canal A, gain 128 : entrée bas bruit, adaptée à une cellule de charge.
- * Le gain se choisit par le nombre d'impulsions d'horloge après les 24 bits
- * de données (25 = A/128, 26 = B/32, 27 = A/64). */
+/* Channel A, gain 128: low-noise input, suited to a load cell.
+ * The gain is selected by the number of clock pulses after the 24 data
+ * bits (25 = A/128, 26 = B/32, 27 = A/64). */
 #define HB_HX711_GAIN_PULSES 25
 
-/* Coefficient du filtre exponentiel. À 80 échantillons/s, 0,5 donne une
- * constante de temps d'environ 12,5 ms et 90 % d'un pas en ~42 ms : le HX711
- * en gain 128 est très stable et l'axe n'est quantifié qu'à 1/1023, donc le
- * bruit qui passe en plus reste imperceptible, sans latence sensible à la
- * main au tirage comme au relâchement. 0,25 se sentait mou. */
+/* Exponential filter coefficient. At 80 samples/s, 0.5 gives a time
+ * constant of about 12.5 ms and 90% of a step in ~42 ms: the HX711 at gain
+ * 128 is very stable and the axis is only quantized to 1/1023, so the extra
+ * noise that gets through stays imperceptible, with no latency the hand can
+ * feel on the pull or on the release. 0.25 felt mushy. */
 #define HB_EMA_ALPHA 0.5f
 
-/* --- Cadences ----------------------------------------------------------- */
+/* --- Rates -------------------------------------------------------------- */
 
-/* Période d'émission de la télémétrie quand le flux est actif. Volontairement
- * plus lente que l'acquisition : l'affichage n'a pas besoin de 80 Hz, et le
- * CDC ne doit pas prendre le pas sur la boucle HID. */
+/* Telemetry emission period while streaming is active. Deliberately slower
+ * than acquisition: the display does not need 80 Hz, and the CDC must not
+ * take precedence over the HID loop. */
 #define HB_TELEMETRY_PERIOD_MS 33 /* ~30 Hz */
 
-/* Le rapport HID n'est envoyé que si la valeur d'axe a changé, avec ce délai
- * maximal entre deux envois pour garder l'hôte en phase même à l'arrêt. */
+/* The HID report is sent only when the axis value changed, with this
+ * maximum delay between two sends to keep the host in step even while
+ * at rest. */
 #define HB_HID_KEEPALIVE_MS 100
 
-/* Au-delà de ce délai sans conversion HX711, le capteur est considéré absent
- * ou mal câblé : l'axe retombe à zéro plutôt que de rester figé sur la
- * dernière valeur lue. */
+/* Beyond this delay with no HX711 conversion, the sensor is considered
+ * absent or miswired: the axis falls back to zero rather than staying
+ * frozen on the last value read. */
 #define HB_SENSOR_TIMEOUT_MS 500
 
 /* The raw value has not changed at all for this long: the sensor is
@@ -46,17 +47,17 @@
  * effective rate. */
 #define HB_STUCK_TIMEOUT_MS 1000
 
-/* --- Stockage ----------------------------------------------------------- */
+/* --- Storage ------------------------------------------------------------ */
 
 #define HB_EEPROM_ADDR    0
 #define HB_EEPROM_MAGIC   0x48424B31UL /* "HBK1" */
 #define HB_EEPROM_VERSION 1
 
-/* --- Sortie HID --------------------------------------------------------- */
+/* --- HID output --------------------------------------------------------- */
 
-/* Un seul axe X, aucun bouton, aucun hat : tout ce qui est inutile est retiré
- * du descripteur. Si un titre particulier refusait d'énumérer un périphérique
- * à un seul axe, activer l'axe Y ici suffirait à contourner le problème. */
+/* A single X axis, no buttons, no hat: everything unnecessary is removed
+ * from the descriptor. If a particular title refused to enumerate a
+ * single-axis device, enabling the Y axis here would work around it. */
 #define HB_JOYSTICK_ENABLE_Y false
 
 #endif /* HB_BOARD_CONFIG_H */

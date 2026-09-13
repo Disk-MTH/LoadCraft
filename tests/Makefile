@@ -1,7 +1,7 @@
-# Tests natifs du cœur du firmware.
+# Native tests of the firmware core.
 #
-# hb_core et hb_protocol sont du C99 pur : ils se compilent tels quels ici,
-# sans carte ni chaîne d'outils AVR.
+# hb_core and hb_protocol are pure C99: they compile as-is here, with no
+# board and no AVR toolchain.
 
 CC      ?= cc
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -Wshadow -Wconversion \

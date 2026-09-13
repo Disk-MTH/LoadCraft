@@ -1,11 +1,10 @@
 /*
- * Driver HX711 non bloquant.
+ * Non-blocking HX711 driver.
  *
- * Écrit à la main plutôt que d'utiliser une bibliothèque existante : le
- * protocole tient en quelques lignes, et les implémentations courantes
- * attendent activement que la conversion soit prête. Ici la boucle principale
- * doit rester libre de servir l'USB et les commandes série entre deux
- * échantillons.
+ * Hand-written rather than using an existing library: the protocol fits in
+ * a few lines, and the usual implementations actively wait for the
+ * conversion to be ready. Here the main loop must stay free to serve USB and
+ * serial commands between two samples.
  */
 #ifndef HB_HX711_H
 #define HB_HX711_H
@@ -19,11 +18,11 @@ public:
 
     void begin();
 
-    /* Vrai quand une conversion est prête à être lue. */
+    /* True when a conversion is ready to be read. */
     bool available() const;
 
-    /* Lit la conversion en attente. Renvoie false si aucune n'est prête, sans
-     * attendre. La valeur est l'entier signé 24 bits du convertisseur. */
+    /* Reads the pending conversion. Returns false if none is ready, without
+     * waiting. The value is the converter's signed 24-bit integer. */
     bool read(int32_t &out);
 
 private:

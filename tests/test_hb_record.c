@@ -13,9 +13,9 @@ static hb_config_t sample_config(void)
     return cfg;
 }
 
-/* --- Aller-retour -------------------------------------------------------- */
+/* --- Round trip ---------------------------------------------------------- */
 
-static void test_aller_retour(void)
+static void test_round_trip(void)
 {
     hb_config_t src = sample_config();
     hb_config_t dst;
@@ -28,12 +28,12 @@ static void test_aller_retour(void)
     CHECK_EQ_INT(dst.raw_max, src.raw_max);
     CHECK_EQ_INT(dst.curve, src.curve);
     CHECK_EQ_INT(dst.calibrated, src.calibrated);
-    /* Le flottant transite par ses bits bruts : il doit revenir à l'identique
-     * au bit près, pas seulement « proche ». */
+    /* The float goes through its raw bits: it must come back bit-identical,
+     * not merely "close". */
     CHECK(dst.gamma == src.gamma);
 }
 
-static void test_aller_retour_valeurs_par_defaut(void)
+static void test_round_trip_default_values(void)
 {
     hb_config_t src;
     hb_config_t dst;
@@ -47,7 +47,7 @@ static void test_aller_retour_valeurs_par_defaut(void)
     CHECK(dst.gamma == src.gamma);
 }
 
-static void test_aller_retour_extremes(void)
+static void test_round_trip_extremes(void)
 {
     hb_config_t src;
     hb_config_t dst;
@@ -65,11 +65,11 @@ static void test_aller_retour_extremes(void)
     CHECK_NEAR(dst.gamma, HB_GAMMA_MIN, 1e-6);
 }
 
-/* --- Détection de corruption --------------------------------------------- */
+/* --- Corruption detection ------------------------------------------------ */
 
-/* Une EEPROM vierge sort à 0xFF partout. Sans magic, elle serait interprétée
- * comme une calibration valide et l'axe partirait n'importe où. */
-static void test_eeprom_vierge_rejetee(void)
+/* A blank EEPROM reads 0xFF everywhere. Without the magic, it would be
+ * interpreted as a valid calibration and the axis would go anywhere. */
+static void test_bare_eeprom_rejected(void)
 {
     hb_config_t cfg;
     uint8_t     buf[HB_RECORD_SIZE];
@@ -86,7 +86,7 @@ static void test_eeprom_vierge_rejetee(void)
     CHECK_EQ_INT(hb_record_unpack(buf, &cfg), 0);
 }
 
-static void test_mauvais_magic_rejete(void)
+static void test_bad_magic_rejected(void)
 {
     hb_config_t src = sample_config();
     hb_config_t dst;
@@ -97,9 +97,9 @@ static void test_mauvais_magic_rejete(void)
     CHECK_EQ_INT(hb_record_unpack(buf, &dst), 0);
 }
 
-/* Une version antérieure a pu écrire une disposition différente à la même
- * adresse : elle doit être rejetée, pas relue de travers. */
-static void test_mauvaise_version_rejetee(void)
+/* An older version may have written a different layout at the same
+ * address: it must be rejected, not misread. */
+static void test_bad_version_rejected(void)
 {
     hb_config_t src = sample_config();
     hb_config_t dst;
@@ -110,9 +110,9 @@ static void test_mauvaise_version_rejetee(void)
     CHECK_EQ_INT(hb_record_unpack(buf, &dst), 0);
 }
 
-/* Chaque octet utile doit être couvert par le CRC : un octet ignoré serait
- * un champ qui peut se corrompre sans être détecté. */
-static void test_chaque_octet_est_couvert_par_le_crc(void)
+/* Every useful byte must be covered by the CRC: an ignored byte would be
+ * a field that can be corrupted without being detected. */
+static void test_every_byte_is_covered_by_the_crc(void)
 {
     hb_config_t src = sample_config();
     size_t      i;
@@ -122,12 +122,12 @@ static void test_chaque_octet_est_couvert_par_le_crc(void)
         uint8_t     buf[HB_RECORD_SIZE];
 
         hb_record_pack(buf, &src);
-        buf[i] ^= 0x01; /* un seul bit retourné */
+        buf[i] ^= 0x01; /* a single bit flipped */
         CHECK_EQ_INT(hb_record_unpack(buf, &dst), 0);
     }
 }
 
-static void test_cfg_intact_si_rejet(void)
+static void test_cfg_untouched_on_reject(void)
 {
     hb_config_t cfg;
     uint8_t     buf[HB_RECORD_SIZE];
@@ -140,15 +140,15 @@ static void test_cfg_intact_si_rejet(void)
         buf[i] = 0xFF;
     }
     CHECK_EQ_INT(hb_record_unpack(buf, &cfg), 0);
-    CHECK_EQ_INT(cfg.raw_min, 4242); /* non écrasé */
+    CHECK_EQ_INT(cfg.raw_min, 4242); /* not overwritten */
 }
 
-/* --- Validation après relecture ------------------------------------------ */
+/* --- Validation after reload --------------------------------------------- */
 
-/* Un CRC correct ne prouve que l'intégrité. Un enregistrement authentique
- * mais au contenu inexploitable doit quand même être ramené dans le domaine
- * valide, sinon un gamma NaN contaminerait tout l'axe. */
-static void test_valeurs_hors_domaine_rattrapees(void)
+/* A correct CRC proves integrity only. An authentic record with unusable
+ * content must still be brought back into the valid domain, otherwise a NaN
+ * gamma would contaminate the whole axis. */
+static void test_out_of_range_values_repaired(void)
 {
     hb_config_t src;
     hb_config_t dst;
@@ -164,7 +164,7 @@ static void test_valeurs_hors_domaine_rattrapees(void)
     CHECK_EQ_INT(dst.curve, HB_CURVE_LINEAR);
 }
 
-static void test_gamma_nan_rattrape(void)
+static void test_gamma_nan_repaired(void)
 {
     hb_config_t src;
     hb_config_t dst;
@@ -180,42 +180,42 @@ static void test_gamma_nan_rattrape(void)
 
 /* --- CRC ------------------------------------------------------------------ */
 
-/* Vecteur de référence du CRC-16/CCITT-FALSE : garantit que l'implémentation
- * est bien l'algorithme annoncé, et non une variante proche. */
-static void test_crc16_vecteur_de_reference(void)
+/* CRC-16/CCITT-FALSE reference vector: guarantees the implementation is
+ * really the announced algorithm, and not a close variant. */
+static void test_crc16_reference_vector(void)
 {
     const uint8_t check[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
     CHECK_EQ_INT(hb_crc16(check, sizeof check), 0x29B1);
 }
 
-static void test_crc16_detecte_les_differences(void)
+static void test_crc16_detects_differences(void)
 {
     const uint8_t a[] = {1, 2, 3, 4};
     const uint8_t b[] = {1, 2, 3, 5};
     const uint8_t c[] = {1, 2, 4, 3};
 
     CHECK(hb_crc16(a, sizeof a) != hb_crc16(b, sizeof b));
-    CHECK(hb_crc16(a, sizeof a) != hb_crc16(c, sizeof c)); /* ordre compris */
-    CHECK_EQ_INT(hb_crc16(a, 0), 0xFFFF);                  /* valeur initiale */
+    CHECK(hb_crc16(a, sizeof a) != hb_crc16(c, sizeof c)); /* order included */
+    CHECK_EQ_INT(hb_crc16(a, 0), 0xFFFF);                  /* initial value */
 }
 
 int main(void)
 {
-    RUN(test_aller_retour);
-    RUN(test_aller_retour_valeurs_par_defaut);
-    RUN(test_aller_retour_extremes);
+    RUN(test_round_trip);
+    RUN(test_round_trip_default_values);
+    RUN(test_round_trip_extremes);
 
-    RUN(test_eeprom_vierge_rejetee);
-    RUN(test_mauvais_magic_rejete);
-    RUN(test_mauvaise_version_rejetee);
-    RUN(test_chaque_octet_est_couvert_par_le_crc);
-    RUN(test_cfg_intact_si_rejet);
+    RUN(test_bare_eeprom_rejected);
+    RUN(test_bad_magic_rejected);
+    RUN(test_bad_version_rejected);
+    RUN(test_every_byte_is_covered_by_the_crc);
+    RUN(test_cfg_untouched_on_reject);
 
-    RUN(test_valeurs_hors_domaine_rattrapees);
-    RUN(test_gamma_nan_rattrape);
+    RUN(test_out_of_range_values_repaired);
+    RUN(test_gamma_nan_repaired);
 
-    RUN(test_crc16_vecteur_de_reference);
-    RUN(test_crc16_detecte_les_differences);
+    RUN(test_crc16_reference_vector);
+    RUN(test_crc16_detects_differences);
 
     TEST_SUMMARY("hb_record");
 }

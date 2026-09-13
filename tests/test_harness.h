@@ -1,6 +1,6 @@
 /*
- * Harnais de test minimal : pas de dépendance externe, les tests se compilent
- * avec un simple gcc et tournent en une fraction de seconde.
+ * Minimal test harness: no external dependency, the tests compile with a
+ * plain gcc and run in a fraction of a second.
  */
 #ifndef TEST_HARNESS_H
 #define TEST_HARNESS_H
@@ -65,7 +65,7 @@ static int hb_tests_failed = 0;
 
 #define TEST_SUMMARY(name)                                                     \
     do {                                                                       \
-        printf("%s: %d assertions, %d échec(s)\n", (name), hb_tests_run,       \
+        printf("%s: %d assertions, %d failure(s)\n", (name), hb_tests_run,     \
                hb_tests_failed);                                               \
         return hb_tests_failed == 0 ? 0 : 1;                                   \
     } while (0)

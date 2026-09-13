@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* --- Outils de découpage ----------------------------------------------- */
+/* --- Tokenizing utilities ---------------------------------------------- */
 
 static int is_space(char c)
 {
@@ -28,9 +28,9 @@ static size_t token_len(const char *p)
     return n;
 }
 
-/* Comparaison insensible à la casse d'un jeton de longueur connue avec une
- * référence terminée par \0. Écrite ici plutôt qu'avec strncasecmp pour ne
- * dépendre d'aucune extension au-delà de C99. */
+/* Case-insensitive comparison of a token of known length with a \0-
+ * terminated reference. Written here rather than with strncasecmp so as
+ * to depend on no extension beyond C99. */
 static int tok_eq(const char *tok, size_t len, const char *ref)
 {
     size_t i;
@@ -72,13 +72,13 @@ static int parse_f32(const char *p, float *out, const char **end)
     return 1;
 }
 
-/* 1 si la ligne est terminée après p (hors espaces). */
+/* 1 if the line is terminated after p (ignoring spaces). */
 static int at_end(const char *p)
 {
     return *skip_ws(p) == '\0';
 }
 
-/* --- Courbes ------------------------------------------------------------ */
+/* --- Curves ------------------------------------------------------------- */
 
 const char *hb_curve_name(uint8_t curve)
 {
@@ -109,7 +109,7 @@ int hb_curve_from_name(const char *name, uint8_t *out)
     return 0;
 }
 
-/* --- Analyse des commandes ---------------------------------------------- */
+/* --- Command parsing ---------------------------------------------------- */
 
 static int parse_set(const char *p, hb_cmd_t *out)
 {
@@ -122,7 +122,7 @@ static int parse_set(const char *p, hb_cmd_t *out)
                                                   : HB_CMD_SET_MAX);
         rest = skip_ws(p + n);
         if (*rest == '\0') {
-            return 1; /* sans argument : capture la valeur courante */
+            return 1; /* no argument: capture the current value */
         }
         if (!parse_i32(rest, &out->ivalue, &end) || !at_end(end)) {
             out->kind = (uint8_t)HB_CMD_UNKNOWN;
@@ -140,7 +140,7 @@ static int parse_set(const char *p, hb_cmd_t *out)
         }
         out->kind = (uint8_t)HB_CMD_SET_CURVE;
 
-        /* Un gamma peut accompagner la courbe : SET CURVE POWER 1.8 */
+        /* A gamma may accompany the curve: SET CURVE POWER 1.8 */
         rest = skip_ws(rest + token_len(rest));
         if (*rest == '\0') {
             return 1;
@@ -228,7 +228,7 @@ int hb_parse_command(const char *line, hb_cmd_t *out)
     return 1; /* HB_CMD_UNKNOWN */
 }
 
-/* --- Formatage ---------------------------------------------------------- */
+/* --- Formatting --------------------------------------------------------- */
 
 size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals)
 {
@@ -255,9 +255,9 @@ size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals)
         scale *= 10U;
     }
 
-    /* Domaine tel que value * scale tienne dans un uint32. Hors domaine ou non
-     * fini — impossible après hb_config_sanitize, mais la sortie doit rester
-     * analysable par l'hôte quoi qu'il arrive. */
+    /* Domain such that value * scale fits in a uint32. Out of domain or
+     * non-finite - impossible after hb_config_sanitize, but the output must
+     * stay parseable by the host whatever happens. */
     {
         float limit = 4000000000.0f / (float)scale;
         if (!(value >= -limit && value <= limit)) {
@@ -273,8 +273,8 @@ size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals)
     ipart  = scaled / scale;
     fpart  = scaled % scale;
 
-    /* Pas de "-0.000" : le signe ne s'écrit que si la valeur arrondie est
-     * réellement non nulle. */
+    /* No "-0.000": the sign is only written if the rounded value is
+     * actually nonzero. */
     if (negative && scaled != 0U) {
         tmp[len++] = '-';
     }
@@ -350,7 +350,7 @@ size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
     return (size_t)n;
 }
 
-/* --- Accumulation de ligne ---------------------------------------------- */
+/* --- Line accumulation -------------------------------------------------- */
 
 void hb_linebuf_init(hb_linebuf_t *lb)
 {
@@ -369,7 +369,7 @@ int hb_linebuf_push(hb_linebuf_t *lb, char ch)
     }
 
     if (ch == '\r') {
-        return 0; /* CRLF toléré */
+        return 0; /* CRLF tolerated */
     }
 
     if (ch == '\n') {
@@ -379,9 +379,9 @@ int hb_linebuf_push(hb_linebuf_t *lb, char ch)
     }
 
     if ((size_t)lb->len + 1U >= sizeof lb->buf) {
-        /* Ligne trop longue : on cesse d'accumuler et on marque le
-         * dépassement. Elle sera rendue tronquée, avec overflow à 1, pour que
-         * l'appelant la rejette au lieu d'exécuter une commande amputée. */
+        /* Line too long: stop accumulating and flag the overflow. It will
+         * be returned truncated, with overflow set to 1, so the caller
+         * rejects it instead of executing a mangled command. */
         lb->overflow = 1;
         return 0;
     }

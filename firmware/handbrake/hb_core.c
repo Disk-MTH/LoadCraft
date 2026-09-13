@@ -2,14 +2,14 @@
 
 #include <math.h>
 
-/* Domaine du HX711 : sortie signée sur 24 bits. */
+/* HX711 domain: signed 24-bit output. */
 #define HB_RAW_LIMIT_MIN (-8388608L)
 #define HB_RAW_LIMIT_MAX (8388607L)
 
 /*
- * avr-libc n'a pas toujours exposé powf. Sur AVR, double est un flottant 32
- * bits (sauf -fno-short-double), donc pow() est déjà l'implémentation simple
- * précision : passer par elle ne coûte rien et supprime le risque.
+ * avr-libc has not always exposed powf. On AVR, double is a 32-bit float
+ * (unless -fno-short-double), so pow() is already the single-precision
+ * implementation: going through it costs nothing and removes the risk.
  */
 static float hb_powf(float base, float exponent)
 {
@@ -22,7 +22,7 @@ static float hb_powf(float base, float exponent)
 
 static float hb_clamp_unit(float v)
 {
-    if (!(v >= 0.0f)) { /* attrape aussi NaN */
+    if (!(v >= 0.0f)) { /* also catches NaN */
         return 0.0f;
     }
     if (v > 1.0f) {
@@ -84,7 +84,7 @@ int hb_config_sanitize(hb_config_t *cfg)
         } else if (cfg->gamma < HB_GAMMA_MIN) {
             cfg->gamma = HB_GAMMA_MIN;
         } else {
-            /* Ni supérieur ni inférieur : NaN. Retour au neutre. */
+            /* Neither greater nor less: NaN. Back to neutral. */
             cfg->gamma = 1.0f;
         }
         changed = 1;
@@ -106,8 +106,8 @@ float hb_normalize(int32_t raw, int32_t raw_min, int32_t raw_max)
         return 0.0f;
     }
 
-    /* La division porte le signe : une plage inversée (cellule câblée en
-     * polarité inverse) donne le bon résultat sans traitement particulier. */
+    /* The division carries the sign: a reversed range (cell wired with
+     * reversed polarity) yields the right result with no special handling. */
     return hb_clamp_unit(((float)raw - (float)raw_min) / span);
 }
 
@@ -120,9 +120,9 @@ float hb_curve_apply(uint8_t curve, float gamma, float t)
         return hb_clamp_unit(hb_powf(t, gamma));
 
     case HB_CURVE_SCURVE:
-        /* Deux moitiés symétriques : douce aux extrémités et franche au
-         * milieu pour gamma > 1, l'inverse pour gamma < 1. Les deux branches
-         * valent 0,5 en t = 0,5, la courbe est donc continue. */
+        /* Two symmetric halves: soft at the ends and steep in the middle
+         * for gamma > 1, the reverse for gamma < 1. Both branches evaluate
+         * to 0.5 at t = 0.5, so the curve is continuous. */
         if (t < 0.5f) {
             return hb_clamp_unit(0.5f * hb_powf(2.0f * t, gamma));
         }
@@ -148,7 +148,7 @@ uint16_t hb_axis_from_unit(float unit)
 void hb_ema_init(hb_ema_t *f, float alpha)
 {
     if (!(alpha > 0.0f && alpha <= 1.0f)) {
-        alpha = 1.0f; /* alpha invalide : le filtre devient transparent */
+        alpha = 1.0f; /* invalid alpha: the filter becomes transparent */
     }
     f->alpha  = alpha;
     f->value  = 0.0f;
@@ -164,8 +164,8 @@ void hb_ema_reset(hb_ema_t *f)
 int32_t hb_ema_push(hb_ema_t *f, int32_t sample)
 {
     if (!f->primed) {
-        /* Premier échantillon adopté tel quel : sinon le filtre mettrait
-         * plusieurs dizaines de lectures à rejoindre le niveau réel depuis 0. */
+        /* First sample adopted as-is: otherwise the filter would take dozens
+         * of readings to reach the real level starting from 0. */
         f->value  = (float)sample;
         f->primed = 1;
     } else {
