@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Tests : tout",
+      "label": "Tests: all",
       "type": "shell",
       "command": "make test",
       "group": { "kind": "test", "isDefault": true },
@@ -10,7 +10,7 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Tests : firmware (natif)",
+      "label": "Tests: firmware (native)",
       "type": "shell",
       "command": "make test-firmware",
       "group": "test",
@@ -18,7 +18,7 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Tests : app",
+      "label": "Tests: app",
       "type": "shell",
       "command": "make test-app",
       "group": "test",
@@ -26,7 +26,7 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Firmware : compiler",
+      "label": "Firmware: compile",
       "type": "shell",
       "command": "make build",
       "group": { "kind": "build", "isDefault": true },
@@ -34,25 +34,25 @@
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Firmware : détecter la carte",
-      "detail": "Affiche le port et le FQBN à utiliser pour le téléversement.",
+      "label": "Firmware: detect the board",
+      "detail": "Shows the port and the FQBN to use for the upload.",
       "type": "shell",
       "command": "make detect",
       "problemMatcher": [],
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Firmware : téléverser",
-      "detail": "Compile puis envoie sur la carte. Demande le port.",
+      "label": "Firmware: upload",
+      "detail": "Compiles then sends to the board. Asks for the port.",
       "type": "shell",
       "command": "make flash PORT=${input:serialPort}",
-      "dependsOn": "Firmware : compiler",
+      "dependsOn": "Firmware: compile",
       "problemMatcher": [],
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "App : lancer",
-      "detail": "Ouvre l'app de calibration (fenêtre native ou navigateur).",
+      "label": "App: launch",
+      "detail": "Opens the calibration app (native window or browser).",
       "type": "shell",
       "command": "${workspaceFolder}/app/.venv/bin/python -m handbrake_tuner",
       "options": { "cwd": "${workspaceFolder}/app" },
@@ -61,14 +61,14 @@
       "presentation": { "reveal": "always", "panel": "dedicated" }
     },
     {
-      "label": "App : installer l'environnement Python",
+      "label": "App: set up the Python environment",
       "type": "shell",
       "command": "make setup-app",
       "problemMatcher": [],
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
     },
     {
-      "label": "Nettoyer",
+      "label": "Clean",
       "type": "shell",
       "command": "make clean",
       "problemMatcher": [],
@@ -79,7 +79,7 @@
     {
       "id": "serialPort",
       "type": "promptString",
-      "description": "Port série de la carte (voir « Firmware : détecter la carte »)",
+      "description": "Serial port of the board (see \"Firmware: detect the board\")",
       "default": "/dev/ttyACM0"
     }
   ]

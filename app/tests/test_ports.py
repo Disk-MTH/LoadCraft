@@ -1,4 +1,4 @@
-"""Tests de l'énumération des ports série."""
+"""Serial port enumeration tests."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class FakePort:
 
 @pytest.fixture
 def fake_comports(monkeypatch):
-    """Remplace serial.tools.list_ports, importé paresseusement par link."""
+    """Replaces serial.tools.list_ports, imported lazily by link."""
     ports: list = []
 
     module = types.ModuleType("serial.tools.list_ports")
@@ -39,9 +39,9 @@ def fake_comports(monkeypatch):
     return ports
 
 
-def test_ports_legacy_ecartes(fake_comports):
-    """Sous Linux, pyserial énumère une trentaine de ports 8250 hérités. La
-    carte y serait introuvable."""
+def test_legacy_ports_filtered_out(fake_comports):
+    """On Linux, pyserial lists about thirty inherited 8250 ports. The
+    board would be unfindable in there."""
     fake_comports.extend(
         [FakePort(f"/dev/ttyS{i}") for i in range(32)]
         + [FakePort("/dev/ttyACM0", "Pro Micro", vid=0x2341, pid=0x8037)]
@@ -52,17 +52,18 @@ def test_ports_legacy_ecartes(fake_comports):
     assert ports[0]["device"] == "/dev/ttyACM0"
 
 
-def test_identifiants_usb_affiches(fake_comports):
-    """Le VID:PID permet de reconnaître la carte quand plusieurs
-    périphériques USB-série sont branchés."""
+def test_usb_identifiers_displayed(fake_comports):
+    """The VID:PID lets you recognize the board when several USB serial
+    devices are plugged in."""
     fake_comports.append(
         FakePort("/dev/ttyACM0", "Pro Micro", vid=0x2341, pid=0x8037)
     )
     assert link.list_ports()[0]["description"] == "Pro Micro [2341:8037]"
 
 
-def test_repli_sur_la_liste_complete(fake_comports):
-    """Sans port USB détecté, mieux vaut un choix encombré qu'aucun choix."""
+def test_fallback_to_the_full_list(fake_comports):
+    """With no USB port detected, a cluttered choice is better than no
+    choice."""
     fake_comports.extend([FakePort("/dev/ttyS0"), FakePort("/dev/ttyS1")])
 
     ports = link.list_ports()
@@ -70,7 +71,7 @@ def test_repli_sur_la_liste_complete(fake_comports):
     assert all(p["usb"] is False for p in ports)
 
 
-def test_liste_triee(fake_comports):
+def test_sorted_list(fake_comports):
     fake_comports.extend(
         [
             FakePort("/dev/ttyACM2", vid=1, pid=1),
@@ -82,7 +83,7 @@ def test_liste_triee(fake_comports):
     assert devices == ["/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2"]
 
 
-def test_aucun_port(fake_comports):
+def test_no_port(fake_comports):
     assert link.list_ports() == []
 
 
@@ -97,7 +98,7 @@ def test_port_dict_exposes_vid_pid(fake_comports):
 
 
 def test_pyserial_absent(monkeypatch):
-    """L'app doit rester diagnosticable si pyserial manque, pas exploser."""
+    """The app must stay diagnosable if pyserial is missing, not crash."""
     monkeypatch.setitem(sys.modules, "serial", None)
     monkeypatch.setitem(sys.modules, "serial.tools", None)
     monkeypatch.setitem(sys.modules, "serial.tools.list_ports", None)

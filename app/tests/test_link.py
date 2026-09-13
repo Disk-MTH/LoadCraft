@@ -1,4 +1,4 @@
-"""Tests de la liaison série, contre une carte simulée."""
+"""Serial link tests, against a simulated board."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def wait_for(predicate, timeout: float = 2.0) -> bool:
     return False
 
 
-# --- Dialogue de base ------------------------------------------------------
+# --- Basic dialogue ---------------------------------------------------------
 
 
 def test_request_ping(link):
@@ -38,33 +38,32 @@ def test_request_config(link, board):
     assert config.curve == "LINEAR"
 
 
-def test_config_mise_a_jour_en_arriere_plan(link):
+def test_config_updated_in_background(link):
     link.request(protocol.cmd_get())
     assert wait_for(lambda: link.config is not None)
     assert isinstance(link.config, Config)
 
 
-def test_commande_transmise_avec_saut_de_ligne(link, board):
+def test_command_sent_with_newline(link, board):
     link.request(protocol.cmd_ping())
     assert board.received == ["PING"]
 
 
-# --- Réponses en retard ----------------------------------------------------
+# --- Late replies ------------------------------------------------------------
 
 
-def test_reponse_en_retard_ne_pollue_pas_la_suivante(link, board):
-    """Une réponse arrivée après expiration ne doit pas être servie à la
-    commande suivante : l'app afficherait alors l'effet de la mauvaise
-    commande."""
-    board.emit("OK PARASITE")
+def test_late_reply_does_not_pollute_the_next_one(link, board):
+    """A reply arriving after the timeout must not be served to the next
+    command: the app would then show the effect of the wrong command."""
+    board.emit("OK NOISE")
     assert wait_for(lambda: link._replies.qsize() > 0)
 
     reply = link.request(protocol.cmd_ping())
     assert reply == Ack("PING")
 
 
-def test_absence_de_reponse_leve_une_erreur(board):
-    class Muet:
+def test_missing_reply_raises_an_error(board):
+    class Mute:
         def write(self, data):
             pass
 
@@ -75,40 +74,41 @@ def test_absence_de_reponse_leve_une_erreur(board):
         def close(self):
             pass
 
-    connection = SerialLink(Muet())
+    connection = SerialLink(Mute())
     connection.start()
     try:
-        with pytest.raises(LinkError, match="pas de réponse"):
+        with pytest.raises(LinkError, match="no reply"):
             connection.request(protocol.cmd_ping(), timeout=0.2)
     finally:
         connection.close()
 
 
-def test_request_config_redemande_apres_un_simple_ack(link, board):
-    """SET MIN répond « OK », pas une configuration : la liaison doit aller
-    la chercher pour que l'app reste à jour."""
+def test_request_config_asks_again_after_a_simple_ack(link, board):
+    """SET MIN answers "OK", not a configuration: the link must fetch it
+    so the app stays up to date."""
     config = link.request_config(protocol.cmd_set_min(4242))
     assert config.raw_min == 4242
     assert board.received == ["SET MIN 4242", "GET"]
 
 
-def test_request_config_propage_une_erreur(link, board):
+def test_request_config_propagates_an_error(link, board):
     with pytest.raises(LinkError, match="unknown command"):
-        link.request_config("COMMANDE INCONNUE")
+        link.request_config("UNKNOWN COMMAND")
 
 
-# --- Télémétrie ------------------------------------------------------------
+# --- Telemetry ---------------------------------------------------------------
 
 
-def test_telemetrie_alimente_l_etat(link, board):
+def test_telemetry_feeds_the_state(link, board):
     board.emit_telemetry(500000)
     assert wait_for(lambda: link.telemetry is not None)
     assert link.telemetry.raw == 500000
 
 
-def test_telemetrie_n_est_pas_prise_pour_une_reponse(link, board):
-    """La télémétrie arrive en continu : si elle passait par la file des
-    réponses, chaque commande recevrait une mesure au lieu de son accusé."""
+def test_telemetry_is_not_taken_for_a_reply(link, board):
+    """Telemetry arrives continuously: if it went through the replies
+    queue, every command would receive a measurement instead of its
+    acknowledgment."""
     board.emit_telemetry(111111)
     board.emit_telemetry(222222)
     assert wait_for(lambda: link.telemetry is not None)
@@ -116,7 +116,7 @@ def test_telemetrie_n_est_pas_prise_pour_une_reponse(link, board):
     assert link.request(protocol.cmd_ping()) == Ack("PING")
 
 
-def test_abonnement(link, board):
+def test_subscription(link, board):
     subscription = link.subscribe()
     board.emit_telemetry(123456)
 
@@ -131,9 +131,9 @@ def test_abonnement(link, board):
         subscription.get_nowait()
 
 
-def test_abonne_lent_perd_les_anciennes_mesures(link, board):
-    """Un abonné qui ne suit pas ne doit pas faire grossir la file sans fin :
-    les mesures les plus anciennes sont abandonnées."""
+def test_slow_subscriber_drops_older_measurements(link, board):
+    """A subscriber that falls behind must not grow the queue without
+    bound: the oldest measurements are dropped."""
     subscription = link.subscribe()
     for i in range(40):
         board.emit_telemetry(100000 + i)
@@ -143,7 +143,7 @@ def test_abonne_lent_perd_les_anciennes_mesures(link, board):
     assert subscription.qsize() <= subscription.maxsize
 
 
-def test_plusieurs_abonnes(link, board):
+def test_multiple_subscribers(link, board):
     first, second = link.subscribe(), link.subscribe()
     board.emit_telemetry(424242)
 
@@ -151,41 +151,40 @@ def test_plusieurs_abonnes(link, board):
     assert second.get(timeout=2.0).raw == 424242
 
 
-# --- Erreurs ---------------------------------------------------------------
+# --- Errors ------------------------------------------------------------------
 
 
-def test_erreur_memorisee(link, board):
-    link.request("COMMANDE INCONNUE")
+def test_error_remembered(link, board):
+    link.request("UNKNOWN COMMAND")
     assert wait_for(lambda: link.last_error is not None)
     assert link.last_error == "unknown command"
 
 
-def test_ecriture_sur_port_ferme(link, board):
+def test_write_on_closed_port(link, board):
     board.close()
-    with pytest.raises(LinkError, match="écriture impossible"):
+    with pytest.raises(LinkError, match="cannot write"):
         link.send(protocol.cmd_ping())
 
 
-def test_fermeture_idempotente(board):
+def test_close_is_idempotent(board):
     connection = SerialLink(board)
     connection.start()
     connection.close()
-    connection.close()  # ne doit pas lever
+    connection.close()  # must not raise
 
 
-def test_lignes_parasites_ignorees(link, board):
-    """Un port série délivre des octets parasites à l'ouverture. Ils ne
-    doivent ni faire tomber le thread de lecture, ni être pris pour des
-    réponses."""
-    board.emit_raw(b"\x00\xff bruit\n")
+def test_stray_lines_ignored(link, board):
+    """A serial port emits stray bytes on open. They must neither crash
+    the read thread nor be taken for replies."""
+    board.emit_raw(b"\x00\xff noise\n")
     board.emit("")
-    board.emit("pas une commande connue")
+    board.emit("not a known command")
 
     assert link.request(protocol.cmd_ping()) == Ack("PING")
 
 
-def test_thread_survit_a_une_erreur_de_lecture():
-    class Cassé:
+def test_thread_survives_a_read_error():
+    class Broken:
         def __init__(self):
             self.calls = 0
 
@@ -194,22 +193,22 @@ def test_thread_survit_a_une_erreur_de_lecture():
 
         def readline(self):
             self.calls += 1
-            raise OSError("carte débranchée")
+            raise OSError("board unplugged")
 
         def close(self):
             pass
 
-    transport = Cassé()
+    transport = Broken()
     connection = SerialLink(transport)
     connection.start()
     try:
         assert wait_for(lambda: connection.last_error is not None)
-        assert "débranchée" in connection.last_error
+        assert "unplugged" in connection.last_error
     finally:
         connection.close()
 
 
-# --- Dead link -------------------------------------------------------------
+# --- Dead link ---------------------------------------------------------------
 
 
 def test_dead_after_read_thread_failure():

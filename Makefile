@@ -1,29 +1,29 @@
-# Raccourcis du projet.
+# Project shortcuts.
 #
-# `make test` lance les deux suites : le cœur du firmware en natif (gcc) et
-# l'app de calibration (pytest). Aucune des deux n'a besoin de la carte.
+# `make test` runs both suites: the firmware core in native (gcc) and the
+# calibration app (pytest). Neither needs the board.
 
-# Beaucoup de clones Pro Micro embarquent le bootloader Leonardo et
-# s'annoncent comme tel (2341:8036). Vérifiez avec `arduino-cli board list` et
-# surchargez si besoin : make build FQBN=arduino:avr:micro
+# Many Pro Micro clones ship the Leonardo bootloader and announce themselves
+# as such (2341:8036). Check with `arduino-cli board list` and override if
+# needed: make build FQBN=arduino:avr:micro
 FQBN ?= arduino:avr:leonardo
 SKETCH = firmware/handbrake
 VENV = app/.venv
 
-# L'environnement Python place l'interpréteur dans Scripts/ sous Windows.
+# The Python environment places the interpreter under Scripts/ on Windows.
 VENV_PY = $(if $(wildcard $(VENV)/Scripts/python.exe),$(VENV)/Scripts/python.exe,$(VENV)/bin/python)
 
 .PHONY: help test test-firmware test-app setup-app build flash clean
 
 help:
-	@echo "make test           les deux suites de tests"
-	@echo "make test-firmware  tests natifs du cœur du firmware (gcc)"
-	@echo "make test-app       tests de l'app de calibration (pytest)"
-	@echo "make setup-app      crée l'environnement Python de l'app"
-	@echo "make detect         identifie la carte et son FQBN"
-	@echo "make build          compile le firmware (arduino-cli requis)"
-	@echo "make flash PORT=…   téléverse le firmware sur la carte"
-	@echo "make clean          supprime les artefacts de compilation"
+	@echo "make test           run both test suites"
+	@echo "make test-firmware  native firmware core tests (gcc)"
+	@echo "make test-app       calibration app tests (pytest)"
+	@echo "make setup-app      create the Python environment of the app"
+	@echo "make detect         identify the board and its FQBN"
+	@echo "make build          compile the firmware (arduino-cli required)"
+	@echo "make flash PORT=... upload the firmware to the board"
+	@echo "make clean          remove the build artifacts"
 
 test: test-firmware test-app
 
@@ -35,12 +35,12 @@ test-app: $(VENV)
 
 setup-app: $(VENV)
 
-# --system-site-packages : le backend GTK de pywebview a besoin de PyGObject,
-# que pip ne fournit pas sans chaîne de compilation complète. Sous Linux, la
-# bibliothèque système est déjà là et se prête au partage ; sous Windows le
-# drapeau est sans effet, pywebview y passant par WebView2.
+# --system-site-packages: pywebview's GTK backend needs PyGObject, which pip
+# does not provide without a full build toolchain. On Linux the system
+# library is already there and lends itself to sharing; on Windows the flag
+# has no effect, pywebview going through WebView2 there.
 $(VENV):
-	@echo "Création de l'environnement Python…"
+	@echo "Creating the Python environment..."
 	@cd app && uv venv --system-site-packages .venv \
 		&& uv pip install --python .venv -e ".[dev,desktop]"
 
@@ -48,10 +48,10 @@ build:
 	arduino-cli compile --fqbn $(FQBN) $(SKETCH)
 
 flash:
-	@test -n "$(PORT)" || { echo "Indiquez le port : make flash PORT=/dev/ttyACM0"; exit 1; }
+	@test -n "$(PORT)" || { echo "Specify the port: make flash PORT=/dev/ttyACM0"; exit 1; }
 	arduino-cli upload --fqbn $(FQBN) --port $(PORT) $(SKETCH)
 
-# Détecte la carte et affiche le FQBN à utiliser.
+# Detects the board and prints the FQBN to use.
 detect:
 	arduino-cli board list
 

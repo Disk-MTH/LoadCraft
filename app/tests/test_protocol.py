@@ -1,7 +1,7 @@
-"""Tests du protocole côté hôte.
+"""Host-side protocol tests.
 
-Les attentes doivent rester alignées sur tests/test_hb_protocol.c : c'est le
-seul garde-fou contre une dérive silencieuse entre les deux implémentations.
+The expectations must stay aligned with tests/test_hb_protocol.c: it is the
+only guard against a silent drift between the two implementations.
 """
 
 import math
@@ -12,7 +12,7 @@ from handbrake_tuner import protocol
 from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
 
 
-# --- Analyse des réponses --------------------------------------------------
+# --- Reply parsing -----------------------------------------------------------
 
 
 def test_parse_config():
@@ -24,14 +24,14 @@ def test_parse_config():
     )
 
 
-def test_parse_config_non_calibree():
+def test_parse_config_not_calibrated():
     message = protocol.parse_line(
         "CFG min=0 max=8000000 curve=LINEAR gamma=1.000 calibrated=0"
     )
     assert message.calibrated is False
 
 
-def test_parse_config_valeurs_negatives():
+def test_parse_config_negative_values():
     message = protocol.parse_line(
         "CFG min=-8388608 max=-1 curve=SCURVE gamma=5.000 calibrated=1"
     )
@@ -45,7 +45,7 @@ def test_parse_telemetry():
     )
 
 
-def test_parse_ok_et_err():
+def test_parse_ok_and_err():
     assert protocol.parse_line("OK SAVE") == Ack("SAVE")
     assert protocol.parse_line("OK SET MIN 1234") == Ack("SET MIN 1234")
     assert protocol.parse_line("ERR unknown command") == Err("unknown command")
@@ -56,25 +56,25 @@ def test_parse_ok_et_err():
     [
         "",
         "   ",
-        "bruit",
+        "noise",
         "CFG",
         "CFG min=abc max=1 curve=LINEAR gamma=1.0 calibrated=0",
-        "CFG min=1 curve=LINEAR gamma=1.0 calibrated=0",  # max manquant
+        "CFG min=1 curve=LINEAR gamma=1.0 calibrated=0",  # missing max
         "CFG min=1 max=2 curve=PARABOLE gamma=1.0 calibrated=0",
         "T raw=1 out=x axis=2",
         "T raw=1",
     ],
 )
-def test_lignes_illisibles_ignorees(line):
-    """Le port délivre des parasites à l'ouverture et au redémarrage de la
-    carte : les ignorer vaut mieux que de faire tomber le thread de lecture."""
+def test_unreadable_lines_ignored(line):
+    """The port emits stray bytes on open and during the board's restart:
+    ignoring them is better than crashing the read thread."""
     assert protocol.parse_line(line) is None
 
 
-# --- Construction des commandes --------------------------------------------
+# --- Command building ----------------------------------------------------------
 
 
-def test_commandes_simples():
+def test_simple_commands():
     assert protocol.cmd_ping() == "PING"
     assert protocol.cmd_get() == "GET"
     assert protocol.cmd_save() == "SAVE"
@@ -84,28 +84,28 @@ def test_commandes_simples():
     assert protocol.cmd_stream(False) == "STREAM 0"
 
 
-def test_commandes_calibration():
+def test_calibration_commands():
     assert protocol.cmd_set_min() == "SET MIN"
     assert protocol.cmd_set_max() == "SET MAX"
     assert protocol.cmd_set_min(1234) == "SET MIN 1234"
     assert protocol.cmd_set_max(-9876) == "SET MAX -9876"
 
 
-def test_commandes_courbe():
+def test_curve_commands():
     assert protocol.cmd_set_curve("POWER") == "SET CURVE POWER"
     assert protocol.cmd_set_curve("power") == "SET CURVE POWER"
     assert protocol.cmd_set_curve("SCURVE", 1.8) == "SET CURVE SCURVE 1.800"
     assert protocol.cmd_set_gamma(2.5) == "SET GAMMA 2.500"
 
 
-def test_courbe_inconnue_rejetee():
+def test_unknown_curve_rejected():
     with pytest.raises(ValueError):
         protocol.cmd_set_curve("PARABOLE")
 
 
-def test_commandes_relisibles_par_le_firmware():
-    """Toute commande produite ici doit correspondre à la grammaire testée
-    dans tests/test_hb_protocol.c."""
+def test_commands_readable_by_the_firmware():
+    """Every command produced here must match the grammar tested in
+    tests/test_hb_protocol.c."""
     commands = [
         protocol.cmd_ping(),
         protocol.cmd_get(),
@@ -126,7 +126,7 @@ def test_commandes_relisibles_par_le_firmware():
         assert len(command) < 64  # HB_LINE_MAX
 
 
-# --- Bornes du gamma -------------------------------------------------------
+# --- Gamma bounds ---------------------------------------------------------------
 
 
 def test_clamp_gamma():
@@ -135,10 +135,10 @@ def test_clamp_gamma():
     assert protocol.clamp_gamma(0.0) == protocol.GAMMA_MIN
     assert protocol.clamp_gamma(-5.0) == protocol.GAMMA_MIN
     assert protocol.clamp_gamma(float("nan")) == 1.0
-    assert protocol.clamp_gamma("bruit") == 1.0
+    assert protocol.clamp_gamma("noise") == 1.0
 
 
-# --- Normalisation ---------------------------------------------------------
+# --- Normalization --------------------------------------------------------------
 
 
 def test_normalize():
@@ -147,15 +147,15 @@ def test_normalize():
     assert protocol.normalize(9999, 1000, 2000) == 1.0
 
 
-def test_normalize_plage_inversee():
-    """Même comportement que hb_normalize : une cellule câblée en polarité
-    opposée reste exploitable sans option d'inversion."""
+def test_normalize_inverted_range():
+    """Same behavior as hb_normalize: a cell wired with opposite polarity
+    stays usable without an inversion option."""
     assert protocol.normalize(1500, 2000, 1000) == pytest.approx(0.5)
     assert protocol.normalize(1000, 2000, 1000) == 1.0
     assert protocol.normalize(2000, 2000, 1000) == 0.0
 
 
-def test_normalize_plage_nulle():
+def test_normalize_zero_range():
     assert protocol.normalize(1000, 1000, 1000) == 0.0
 
 

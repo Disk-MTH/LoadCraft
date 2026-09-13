@@ -2,8 +2,8 @@
   "version": 4,
   "configurations": [
     {
-      "name": "Cœur firmware (natif)",
-      "//": "Le cœur est du C99 pur, sans Arduino : c'est la configuration qui sert pour hb_core, hb_protocol, hb_record et les tests.",
+      "name": "Firmware core (native)",
+      "//": "The core is pure C99, without Arduino: this is the configuration used for hb_core, hb_protocol, hb_record and the tests.",
       "includePath": [
         "${workspaceFolder}/firmware/handbrake",
         "${workspaceFolder}/tests"
@@ -15,7 +15,7 @@
     },
     {
       "name": "Firmware AVR (ATmega32u4)",
-      "//": "Les chemins suivent l'installation par défaut d'arduino-cli. Ajustez le numéro de version du core si vous le mettez à jour.",
+      "//": "The paths follow arduino-cli's default installation. Adjust the core version number if you update it.",
       "includePath": [
         "${workspaceFolder}/firmware/handbrake",
         "${env:HOME}/.arduino15/packages/arduino/hardware/avr/1.8.8/cores/arduino",

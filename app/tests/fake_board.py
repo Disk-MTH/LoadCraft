@@ -1,4 +1,4 @@
-"""Carte simulée : transport série factice pour tester sans matériel."""
+"""Simulated board: fake serial transport to test without hardware."""
 
 from __future__ import annotations
 
@@ -9,10 +9,11 @@ from handbrake_tuner import protocol
 
 
 class FakeBoard:
-    """Carte simulée : rejoue la logique de réponse du firmware.
+    """Simulated board: replays the firmware's reply logic.
 
-    Assez fidèle pour valider le dialogue (ordre des réponses, effet des
-    commandes sur la configuration), sans prétendre remplacer un essai réel.
+    Faithful enough to validate the dialogue (reply order, effect of the
+    commands on the configuration), without claiming to replace a real
+    trial.
     """
 
     def __init__(self, calibrated: bool = True):
@@ -29,11 +30,11 @@ class FakeBoard:
         self._out: "queue.Queue[bytes]" = queue.Queue()
         self._closed = threading.Event()
 
-    # --- Interface transport ---------------------------------------------
+    # --- Transport interface -----------------------------------------------
 
     def write(self, data: bytes) -> None:
         if self._closed.is_set():
-            raise OSError("port fermé")
+            raise OSError("port closed")
         for line in data.decode("ascii").splitlines():
             line = line.strip()
             if line:
@@ -51,16 +52,16 @@ class FakeBoard:
     def close(self) -> None:
         self._closed.set()
 
-    # --- Émission ---------------------------------------------------------
+    # --- Emission -----------------------------------------------------------
 
     def emit(self, line: str) -> None:
         self._out.put((line + "\n").encode("ascii"))
 
     def emit_raw(self, data: bytes) -> None:
-        """Émet des octets bruts, y compris non ASCII.
+        """Emits raw bytes, including non-ASCII.
 
-        Une vraie carte en délivre à l'ouverture du port et pendant son
-        redémarrage : la liaison doit y survivre.
+        A real board emits them on port open and during its restart: the
+        link must survive them.
         """
         self._out.put(data)
 
@@ -76,7 +77,7 @@ class FakeBoard:
         out = protocol.apply_curve(self.curve, self.gamma, t)
         self.emit(f"T raw={raw} out={out:.3f} axis={round(out * protocol.AXIS_MAX)}")
 
-    # --- Réponses ---------------------------------------------------------
+    # --- Replies ------------------------------------------------------------
 
     def _handle(self, line: str) -> None:
         parts = line.split()

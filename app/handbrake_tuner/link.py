@@ -1,7 +1,7 @@
-"""Liaison série avec la carte.
+"""Serial link with the board.
 
-Le transport est injecté plutôt que créé ici : les tests fournissent un faux
-transport et couvrent toute la logique de dialogue sans matériel ni pyserial.
+The transport is injected rather than created here: the tests supply a fake
+transport and cover the whole dialogue logic without hardware or pyserial.
 """
 
 from __future__ import annotations
@@ -15,29 +15,29 @@ from typing import List, Optional
 from . import protocol
 from .protocol import Ack, Config, Err, Telemetry
 
-# Vitesse ignorée par un port CDC (le débit est celui de l'USB), présente par
-# convention et parce que pyserial exige une valeur.
+# Baud rate ignored by a CDC port (the rate is the USB one), present by
+# convention and because pyserial requires a value.
 BAUDRATE = 115200
 
-# Le firmware répond immédiatement ; au-delà, c'est que la carte ne parle pas
-# ce protocole ou a redémarré.
+# The firmware replies immediately; beyond that, the board is not speaking
+# this protocol or has restarted.
 REPLY_TIMEOUT = 2.0
 
-# Au-delà de cette taille, un abonné SSE ne suit plus : ses évènements les plus
-# anciens sont abandonnés plutôt que de faire grossir la file sans fin.
+# Beyond this size an SSE subscriber falls behind: its oldest events are
+# dropped rather than growing the queue without bound.
 SUBSCRIBER_QUEUE_SIZE = 8
 
 
 class LinkError(RuntimeError):
-    """Échec de dialogue avec la carte."""
+    """Dialogue failure with the board."""
 
 
 class SerialLink:
-    """Dialogue avec la carte : thread de lecture, envoi de commandes.
+    """Dialogue with the board: read thread, command sending.
 
-    Le thread de lecture trie les lignes reçues : la télémétrie alimente
-    l'état courant et les abonnés, tout le reste part dans la file de réponses
-    attendue par :meth:`request`.
+    The read thread sorts the received lines: telemetry feeds the current
+    state and the subscribers, everything else goes into the replies queue
+    awaited by :meth:`request`.
     """
 
     def __init__(self, transport, port: str = ""):
@@ -52,7 +52,7 @@ class SerialLink:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
-    # --- Cycle de vie ------------------------------------------------------
+    # --- Lifecycle ---------------------------------------------------------
 
     def start(self) -> None:
         if self._thread is not None:
@@ -68,14 +68,14 @@ class SerialLink:
         try:
             self._transport.close()
         except Exception:
-            # Le port peut déjà avoir disparu (carte débranchée) : la
-            # fermeture doit rester sans conséquence.
+            # The port may already be gone (board unplugged): closing must
+            # stay side-effect free.
             pass
         thread, self._thread = self._thread, None
         if thread is not None:
             thread.join(timeout=1.0)
 
-    # --- État --------------------------------------------------------------
+    # --- State -------------------------------------------------------------
 
     @property
     def config(self) -> Optional[Config]:
@@ -94,25 +94,25 @@ class SerialLink:
 
     @property
     def dead(self) -> bool:
-        """Le thread de lecture est mort : le transport a échoué (carte
-        débranchée) ou la liaison a été fermée. Elle est inutilisable ; le
-        manager de liaison (manager.py) s'occupe du nettoyage."""
+        """The read thread is dead: the transport failed (board unplugged)
+        or the link was closed. It is unusable; the link manager
+        (manager.py) handles the cleanup."""
         thread = self._thread
         return thread is None or not thread.is_alive()
 
-    # --- Envoi -------------------------------------------------------------
+    # --- Sending -----------------------------------------------------------
 
     def send(self, command: str) -> None:
         try:
             self._transport.write((command + "\n").encode("ascii"))
         except Exception as exc:
-            raise LinkError(f"écriture impossible : {exc}") from exc
+            raise LinkError(f"cannot write: {exc}") from exc
 
     def request(self, command: str, timeout: float = REPLY_TIMEOUT) -> object:
-        """Envoie une commande et attend la réponse correspondante.
+        """Sends a command and waits for the matching reply.
 
-        Les réponses en attente sont vidées avant l'envoi : sinon la réponse
-        d'une commande précédente arrivée en retard serait prise pour celle-ci.
+        Pending replies are drained before sending: otherwise a late reply
+        from a previous command would be mistaken for this one.
         """
         if self.dead:
             raise LinkError("link is down")
@@ -128,23 +128,23 @@ class SerialLink:
         try:
             return self._replies.get(timeout=timeout)
         except queue.Empty:
-            raise LinkError(f"pas de réponse à « {command} »") from None
+            raise LinkError(f"no reply to {command}") from None
 
     def request_config(self, command: str) -> Config:
-        """Envoie une commande dont la réponse attendue est une ``CFG``."""
+        """Sends a command whose expected reply is a ``CFG``."""
         reply = self.request(command)
         if isinstance(reply, Config):
             return reply
         if isinstance(reply, Err):
             raise LinkError(reply.reason)
-        # Certaines commandes accusent réception sans renvoyer la
-        # configuration : on la redemande pour que l'app reste à jour.
+        # Some commands acknowledge without resending the configuration:
+        # it is fetched again so the app stays up to date.
         reply = self.request(protocol.cmd_get())
         if isinstance(reply, Config):
             return reply
-        raise LinkError("configuration illisible")
+        raise LinkError("unreadable configuration")
 
-    # --- Abonnements SSE ---------------------------------------------------
+    # --- SSE subscriptions -------------------------------------------------
 
     def subscribe(self) -> "queue.Queue":
         q: "queue.Queue" = queue.Queue(maxsize=SUBSCRIBER_QUEUE_SIZE)
@@ -157,7 +157,7 @@ class SerialLink:
             if q in self._subscribers:
                 self._subscribers.remove(q)
 
-    # --- Thread de lecture -------------------------------------------------
+    # --- Read thread -------------------------------------------------------
 
     def _read_loop(self) -> None:
         while not self._stop.is_set():
@@ -169,7 +169,7 @@ class SerialLink:
                 break
 
             if not raw:
-                continue  # délai d'attente écoulé, rien à lire
+                continue  # timeout, nothing to read
 
             try:
                 line = raw.decode("ascii", errors="replace")
@@ -197,12 +197,12 @@ class SerialLink:
             with self._lock:
                 self._last_error = message.reason
 
-        # Config, Ack et Err sont toutes des réponses à une commande.
+        # Config, Ack and Err are all replies to a command.
         self._replies.put(message)
 
 
 def _offer(q: "queue.Queue", item) -> None:
-    """Dépose sans jamais bloquer, en abandonnant le plus ancien si besoin."""
+    """Deposits without ever blocking, dropping the oldest item if needed."""
     try:
         q.put_nowait(item)
     except queue.Full:
@@ -213,7 +213,7 @@ def _offer(q: "queue.Queue", item) -> None:
             pass
 
 
-# --- Transport réel --------------------------------------------------------
+# --- Real transport --------------------------------------------------------
 
 
 def _describe(port) -> dict:
@@ -231,18 +231,17 @@ def _describe(port) -> dict:
 
 
 def list_ports() -> List[dict]:
-    """Ports série disponibles.
+    """Available serial ports.
 
-    Seuls les ports USB sont retenus : sous Linux, pyserial énumère aussi la
-    trentaine de ports 8250 hérités (``/dev/ttyS*``), qui noieraient la carte
-    dans une liste où elle est introuvable. Un handbrake est par construction
-    un périphérique USB.
+    Only USB ports are kept: on Linux, pyserial also lists the thirty or so
+    inherited 8250 ports (``/dev/ttyS*``), which would bury the board in a
+    list where it is unfindable. A handbrake is a USB device by construction.
 
-    Si aucun port USB n'est détecté, la liste complète est renvoyée plutôt
-    qu'une liste vide : mieux vaut un choix encombré qu'aucun choix.
+    If no USB port is detected, the full list is returned rather than an
+    empty one: a cluttered choice is better than no choice at all.
 
-    pyserial est importé ici et non au chargement du module : les tests
-    tournent sans lui, et l'app reste diagnosticable s'il manque.
+    pyserial is imported here and not at module load: the tests run without
+    it, and the app stays diagnosable if it is missing.
     """
     try:
         from serial.tools import list_ports as _list_ports
@@ -255,48 +254,47 @@ def list_ports() -> List[dict]:
 
 
 def _open_failure_hint(port: str, exc: Exception) -> str:
-    """Message d'ouverture actionnable.
+    """Actionable open-failure message.
 
-    Les erreurs d'ouverture de port ont chacune une cause dominante et une
-    correction connue. Les renvoyer brutes (« [Errno 13] Permission denied »)
-    laisse chercher ce que le programme sait déjà.
+    Each open error has a dominant cause and a known fix. Returning the
+    raw error ("[Errno 13] Permission denied") leaves the user hunting
+    for what the program already knows.
     """
     code = getattr(exc, "errno", None)
 
     if code == errno.EACCES:
         if sys.platform.startswith("linux"):
             return (
-                f"accès refusé à {port}. Sous Linux, l'accès aux ports série "
-                "passe par le groupe « dialout » : "
-                "sudo usermod -aG dialout $USER, puis déconnexion et "
-                "reconnexion de session. Une application déjà ouverte avant "
-                "cette manipulation garde les anciens droits et doit être "
-                "entièrement relancée."
+                f"access to {port} denied. On Linux, serial port access "
+                "goes through the dialout group: "
+                "sudo usermod -aG dialout $USER, then log out and log "
+                "back in. An application started before that step keeps "
+                "its old credentials and must be fully restarted."
             )
-        return f"accès refusé à {port}. Vérifiez les droits sur le port."
+        return f"access to {port} denied. Check the port permissions."
 
     if code == errno.EBUSY:
         return (
-            f"{port} est déjà ouvert par un autre programme "
-            "(moniteur série, autre instance de l'app…)."
+            f"{port} is already open by another program "
+            "(serial monitor, another app instance...)."
         )
 
     if code == errno.ENOENT:
         return (
-            f"{port} n'existe pas. La carte a-t-elle été débranchée, ou le "
-            "port a-t-il changé de nom ?"
+            f"{port} does not exist. Was the board unplugged, or did "
+            "the port change its name?"
         )
 
-    return f"ouverture de {port} impossible : {exc}"
+    return f"cannot open {port}: {exc}"
 
 
 def open_serial(port: str, timeout: float = 0.2):
-    """Ouvre un port série réel."""
+    """Opens a real serial port."""
     try:
         import serial
     except ImportError as exc:
         raise LinkError(
-            "pyserial n'est pas installé (pip install pyserial)"
+            "pyserial is not installed (pip install pyserial)"
         ) from exc
 
     try:
@@ -306,13 +304,13 @@ def open_serial(port: str, timeout: float = 0.2):
 
 
 def connect(port: str) -> SerialLink:
-    """Ouvre le port, démarre la lecture et récupère la configuration."""
+    """Opens the port, starts reading and fetches the configuration."""
     link = SerialLink(open_serial(port), port=port)
     link.start()
     try:
         config = link.request_config(protocol.cmd_get())
         if config is None:
-            raise LinkError("la carte n'a pas répondu")
+            raise LinkError("the board did not answer")
         link.send(protocol.cmd_stream(True))
     except Exception:
         link.close()

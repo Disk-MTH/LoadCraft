@@ -1,12 +1,12 @@
-"""Protocole série du handbrake, côté hôte.
+"""Handbrake serial protocol, host side.
 
-Miroir de ``firmware/handbrake/hb_protocol.c``. Volontairement sans état et
-sans entrée/sortie : tout ce qui peut être faux dans l'échange avec la carte
-est testable sans carte.
+Mirror of ``firmware/handbrake/hb_protocol.c``. Deliberately stateless and
+free of I/O: everything that can go wrong in the exchange with the board is
+testable without a board.
 
-Les courbes sont réimplémentées ici plutôt que demandées au firmware, pour que
-l'aperçu affiché dans l'app corresponde exactement à ce que le firmware
-calcule. ``tests/test_curve.py`` vérifie les mêmes propriétés que les tests C.
+The curves are re-implemented here rather than requested from the firmware,
+so that the preview shown in the app matches exactly what the firmware
+computes. ``tests/test_curve.py`` checks the same properties as the C tests.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Union
 
-# Doivent rester alignées sur firmware/handbrake/hb_core.h
+# Must stay aligned with firmware/handbrake/hb_core.h
 AXIS_MAX = 1023
 GAMMA_MIN = 0.10
 GAMMA_MAX = 5.00
@@ -23,7 +23,7 @@ CURVES = ("LINEAR", "POWER", "SCURVE")
 
 @dataclass(frozen=True)
 class Config:
-    """Configuration renvoyée par la carte (ligne ``CFG …``)."""
+    """Configuration returned by the board (``CFG ...`` line)."""
 
     raw_min: int
     raw_max: int
@@ -43,7 +43,7 @@ class Config:
 
 @dataclass(frozen=True)
 class Telemetry:
-    """Mesure temps réel (ligne ``T …``)."""
+    """Real-time measurement (``T ...`` line)."""
 
     raw: int
     out: float
@@ -72,7 +72,7 @@ class Err:
 Message = Union[Config, Telemetry, Ack, Err]
 
 
-# --- Analyse ---------------------------------------------------------------
+# --- Parsing ---------------------------------------------------------------
 
 
 def _fields(parts: list[str]) -> dict[str, str]:
@@ -85,12 +85,11 @@ def _fields(parts: list[str]) -> dict[str, str]:
 
 
 def parse_line(line: str) -> Optional[Message]:
-    """Analyse une ligne reçue de la carte.
+    """Parses a line received from the board.
 
-    Renvoie ``None`` pour une ligne vide ou non reconnue. Le port série
-    délivre des octets parasites à l'ouverture et pendant le redémarrage de la
-    carte : les ignorer est plus sûr que de lever une exception dans le thread
-    de lecture.
+    Returns ``None`` for an empty or unrecognized line. The serial port
+    emits stray bytes on open and during the board's restart: ignoring them
+    is safer than raising an exception in the read thread.
     """
     line = line.strip()
     if not line:
@@ -136,7 +135,7 @@ def parse_line(line: str) -> Optional[Message]:
     return None
 
 
-# --- Construction des commandes -------------------------------------------
+# --- Command building --------------------------------------------------------
 
 
 def cmd_ping() -> str:
@@ -174,7 +173,7 @@ def cmd_set_max(value: Optional[int] = None) -> str:
 def cmd_set_curve(curve: str, gamma: Optional[float] = None) -> str:
     curve = curve.upper()
     if curve not in CURVES:
-        raise ValueError(f"courbe inconnue: {curve}")
+        raise ValueError(f"unknown curve: {curve}")
     if gamma is None:
         return f"SET CURVE {curve}"
     return f"SET CURVE {curve} {_fmt_gamma(gamma)}"
@@ -188,11 +187,11 @@ def _fmt_gamma(gamma: float) -> str:
     return f"{float(gamma):.3f}"
 
 
-# --- Courbes ---------------------------------------------------------------
+# --- Curves ------------------------------------------------------------------
 
 
 def clamp_gamma(gamma: float) -> float:
-    """Applique les mêmes bornes que ``hb_config_sanitize``."""
+    """Applies the same bounds as ``hb_config_sanitize``."""
     try:
         gamma = float(gamma)
     except (TypeError, ValueError):
@@ -203,7 +202,7 @@ def clamp_gamma(gamma: float) -> float:
 
 
 def apply_curve(curve: str, gamma: float, t: float) -> float:
-    """Courbe de réponse. Miroir de ``hb_curve_apply``."""
+    """Response curve. Mirror of ``hb_curve_apply``."""
     t = max(0.0, min(1.0, t))
     gamma = clamp_gamma(gamma)
 
@@ -219,10 +218,10 @@ def apply_curve(curve: str, gamma: float, t: float) -> float:
 
 
 def normalize(raw: int, raw_min: int, raw_max: int) -> float:
-    """Position dans la plage calibrée. Miroir de ``hb_normalize``.
+    """Position within the calibrated range. Mirror of ``hb_normalize``.
 
-    Gère les plages inversées : une cellule câblée en polarité opposée donne
-    ``raw_max < raw_min`` et reste correctement traitée.
+    Handles inverted ranges: a cell wired with opposite polarity yields
+    ``raw_max < raw_min`` and is still handled correctly.
     """
     span = float(raw_max) - float(raw_min)
     if span == 0.0:
@@ -231,7 +230,7 @@ def normalize(raw: int, raw_min: int, raw_max: int) -> float:
 
 
 def curve_points(curve: str, gamma: float, count: int = 64) -> list[list[float]]:
-    """Points ``[t, sortie]`` pour tracer l'aperçu de la courbe."""
+    """``[t, output]`` points for drawing the curve preview."""
     count = max(2, min(512, int(count)))
     step = 1.0 / (count - 1)
     return [
