@@ -52,6 +52,7 @@ class LinkManager:
         self._port_description: Optional[str] = None
         self._last_scan = 0.0
         self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
 
     # --- Lifecycle --------------------------------------------------------
 
@@ -59,6 +60,7 @@ class LinkManager:
         """Starts the background watchdog thread (daemon)."""
         if self._thread is not None:
             return
+        self._stop.clear()
         self._thread = threading.Thread(
             target=self._run, name="link-manager", daemon=True
         )
@@ -66,15 +68,16 @@ class LinkManager:
 
     def stop(self) -> None:
         """Stops the watchdog and closes the link if any."""
+        self._stop.set()
         thread, self._thread = self._thread, None
         if thread is not None:
             thread.join(timeout=2.0)
         self._drop_link()
 
     def _run(self) -> None:
-        while True:
+        while not self._stop.is_set():
             self.run_once(time.monotonic())
-            time.sleep(self._poll_interval)
+            self._stop.wait(self._poll_interval)
 
     # --- State machine -----------------------------------------------------
 

@@ -231,3 +231,14 @@ def test_request_config_round_trip(available, clock):
     config = manager.request_config(protocol.cmd_set_min(4242))
     assert config.raw_min == 4242
     assert holder["board"].received[-1] == "GET"
+
+
+def test_stop_is_prompt_and_terminates_the_watchdog(clock):
+    manager, _, _ = make_manager([])
+    manager.start()
+    started = time.monotonic()
+    manager.stop()
+    elapsed = time.monotonic() - started
+    # A functioning stop flag makes the join return in milliseconds; the old
+    # flagless loop always burned the full 2 s join timeout.
+    assert elapsed < 1.5
