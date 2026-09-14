@@ -34,6 +34,7 @@ class Config:
     gamma: float
     alpha: float
     calibrated: bool
+    ver: Optional[str] = None  # firmware version (absent on older boards)
 
     def as_dict(self) -> dict:
         return {
@@ -43,6 +44,7 @@ class Config:
             "gamma": self.gamma,
             "alpha": self.alpha,
             "calibrated": self.calibrated,
+            "ver": self.ver,
         }
 
 
@@ -116,6 +118,7 @@ def parse_line(line: str) -> Optional[Message]:
                 gamma=float(fields["gamma"]),
                 alpha=float(fields["alpha"]),
                 calibrated=fields["calibrated"] == "1",
+                ver=fields.get("ver"),
             )
         except (KeyError, ValueError):
             return None
