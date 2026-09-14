@@ -15,7 +15,7 @@ VENV = app/.venv
 # The Python environment places the interpreter under Scripts/ on Windows.
 VENV_PY = $(if $(wildcard $(VENV)/Scripts/python.exe),$(VENV)/Scripts/python.exe,$(VENV)/bin/python)
 
-.PHONY: help test test-firmware test-app setup-app build flash clean version build-hex
+.PHONY: help test test-firmware test-app setup-app build flash clean version build-hex package-linux package-win package
 
 help:
 	@echo "make test           run both test suites"
@@ -90,6 +90,47 @@ build-hex:
 	[ -f "$$hex" ] || hex="$(SKETCH)/build/$(notdir $(SKETCH)).ino.$(FQBN).hex"; \
 	cp "$$hex" $(APP_DATA)/handbrake.hex; \
 	echo "Firmware $$v hex -> $(APP_DATA)/handbrake.hex"
+
+# --- Packaging ----------------------------------------------------------------
+# package-linux: PyInstaller onedir -> AppImage (appimagetool required).
+# package-win:   PyInstaller onefile (Windows only: no cross-compilation).
+PYI = $(abspath $(VENV_PY)) -m PyInstaller
+
+package-linux: build-hex $(VENV)
+	@command -v appimagetool >/dev/null || { \
+	  echo "appimagetool not found - install it from https://github.com/AppImage/appimagetool/releases"; \
+	  exit 1; }
+	mkdir -p $(APP_DATA)/avrdude
+	cp dist-tools/avrdude/avrdude dist-tools/avrdude/avrdude.conf $(APP_DATA)/avrdude/
+	cd app && uv pip install --python .venv pyinstaller
+	cd app && $(PYI) --noconfirm --onedir --name LoadCraft \
+		--paths . --exclude-module webview \
+		--add-data "loadcraft/data:loadcraft/data" main.py
+	python3 scripts/make_icon.py dist-tools/LoadCraft.png
+	rm -rf app/dist/LoadCraft.AppDir
+	mkdir -p app/dist/LoadCraft.AppDir/usr/bin
+	cp -r app/dist/LoadCraft/. app/dist/LoadCraft.AppDir/usr/bin/
+	# $$-escaped so make hands the shell the literal dirname/readlink call.
+	printf '#!/bin/sh\nexec "$$(dirname "$$(readlink -f "$$0")")/usr/bin/LoadCraft" "$$@"\n' > app/dist/LoadCraft.AppDir/AppRun; \
+	chmod +x app/dist/LoadCraft.AppDir/AppRun
+	cp dist-tools/LoadCraft.desktop dist-tools/LoadCraft.png app/dist/LoadCraft.AppDir/
+	appimagetool app/dist/LoadCraft.AppDir
+	mkdir -p dist
+	mv LoadCraft-x86_64.AppImage "dist/LoadCraft-$(VERSION)-linux.AppImage"
+	@echo "AppImage -> dist/LoadCraft-$(VERSION)-linux.AppImage"
+
+package-win: build-hex $(VENV)
+	mkdir -p $(APP_DATA)/avrdude
+	cp dist-tools/avrdude/avrdude.exe dist-tools/avrdude/avrdude.conf $(APP_DATA)/avrdude/
+	cd app && uv pip install --python .venv pyinstaller
+	cd app && $(PYI) --noconfirm --onefile --windowed --name LoadCraft \
+		--paths . --exclude-module webview \
+		--add-data "loadcraft/data;loadcraft/data" main.py
+	mkdir -p dist
+	mv app/dist/LoadCraft.exe "dist/LoadCraft-$(VERSION)-windows-x64.exe"
+	@echo "Exe -> dist/LoadCraft-$(VERSION)-windows-x64.exe"
+
+package: package-linux package-win
 
 # Detects the board and prints the FQBN to use.
 detect:

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=LoadCraft
+Comment=LoadCraft handbrake calibration
+Exec=AppRun
+Icon=LoadCraft
+Type=Application
+Categories=Utility;
