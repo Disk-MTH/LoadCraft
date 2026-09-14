@@ -312,7 +312,7 @@ static void test_format_config(void)
     cfg.alpha      = 0.75f;
     cfg.calibrated = 1;
 
-    hb_format_config(buf, sizeof buf, &cfg);
+    hb_format_config(buf, sizeof buf, &cfg, NULL);
     CHECK_STR(buf,
               "CFG min=12345 max=987654 curve=POWER gamma=1.800 "
               "alpha=0.750 calibrated=1");
@@ -332,7 +332,45 @@ static void test_format_config_worst_case(void)
     cfg.alpha      = HB_ALPHA_MAX;
     cfg.calibrated = 1;
 
-    CHECK(hb_format_config(buf, sizeof buf, &cfg) > 0);
+    CHECK(hb_format_config(buf, sizeof buf, &cfg, NULL) > 0);
+}
+
+/* The version travels in the CFG line so the app can compare it with the
+ * firmware version it bundles and offer a flash when they differ. */
+static void test_format_config_with_version(void)
+{
+    hb_config_t cfg;
+    char        buf[HB_REPLY_MAX];
+
+    hb_config_defaults(&cfg);
+    cfg.raw_min    = 12345;
+    cfg.raw_max    = 987654;
+    cfg.curve      = HB_CURVE_POWER;
+    cfg.gamma      = 1.8f;
+    cfg.alpha      = 0.75f;
+    cfg.calibrated = 1;
+
+    hb_format_config(buf, sizeof buf, &cfg, "1.0.0");
+    CHECK_STR(buf,
+              "CFG min=12345 max=987654 curve=POWER gamma=1.800 "
+              "alpha=0.750 calibrated=1 ver=1.0.0");
+}
+
+/* A long version must still fit HB_REPLY_MAX in the worst-case config,
+ * otherwise the reply would truncate at the least convenient moment. */
+static void test_format_config_worst_case_with_version(void)
+{
+    hb_config_t cfg;
+    char        buf[HB_REPLY_MAX];
+
+    cfg.raw_min    = -8388608L;
+    cfg.raw_max    = -8388608L;
+    cfg.curve      = HB_CURVE_SCURVE;
+    cfg.gamma      = HB_GAMMA_MAX;
+    cfg.alpha      = HB_ALPHA_MAX;
+    cfg.calibrated = 1;
+
+    CHECK(hb_format_config(buf, sizeof buf, &cfg, "999.999.999") > 0);
 }
 
 static void test_format_telemetry(void)
@@ -362,7 +400,7 @@ static void test_format_buffer_too_small(void)
     char        buf[8];
 
     hb_config_defaults(&cfg);
-    CHECK_EQ_INT(hb_format_config(buf, sizeof buf, &cfg), 0);
+    CHECK_EQ_INT(hb_format_config(buf, sizeof buf, &cfg, NULL), 0);
     CHECK_STR(buf, "");
     CHECK_EQ_INT(hb_format_telemetry(buf, sizeof buf, 123456, 0.5f, 512, 1), 0);
     CHECK_STR(buf, "");
@@ -478,6 +516,8 @@ int main(void)
 
     RUN(test_format_config);
     RUN(test_format_config_worst_case);
+    RUN(test_format_config_with_version);
+    RUN(test_format_config_worst_case_with_version);
     RUN(test_format_telemetry);
     RUN(test_format_telemetry_without_sensor);
     RUN(test_format_buffer_too_small);

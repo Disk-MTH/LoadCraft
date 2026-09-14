@@ -4,6 +4,7 @@ build/
 *.elf
 *.hex
 *.bin
+firmware/handbrake/version.h
 
 # Python
 __pycache__/

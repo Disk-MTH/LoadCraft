@@ -68,8 +68,10 @@ int hb_curve_from_name(const char *name, uint8_t *out);
  * buffer is too small - in which case buf receives an empty string. */
 size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals);
 
-/* "CFG min=... max=... curve=... gamma=... alpha=... calibrated=..." */
-size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg);
+/* "CFG min=... max=... curve=... gamma=... alpha=... calibrated=..."
+ * With a version: append " ver=<version>" (version NULL or empty: omitted). */
+size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg,
+                        const char *version);
 
 /* "T raw=... out=... axis=... s=..." - s=1 with a valid sample, s=0 otherwise. */
 size_t hb_format_telemetry(char *buf, size_t size, int32_t raw, float unit,
