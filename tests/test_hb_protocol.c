@@ -406,6 +406,18 @@ static void test_format_buffer_too_small(void)
     CHECK_STR(buf, "");
 }
 
+/* A version with a buffer that does not even fit the base line must not
+ * write past the buffer: the reply is empty and the return is 0. */
+static void test_format_buffer_too_small_with_version(void)
+{
+    hb_config_t cfg;
+    char        buf[8];
+
+    hb_config_defaults(&cfg);
+    CHECK_EQ_INT(hb_format_config(buf, sizeof buf, &cfg, "1.0.0"), 0);
+    CHECK_STR(buf, "");
+}
+
 /* --- Line accumulation --------------------------------------------------- */
 
 static int push_str(hb_linebuf_t *lb, const char *s)
@@ -521,6 +533,7 @@ int main(void)
     RUN(test_format_telemetry);
     RUN(test_format_telemetry_without_sensor);
     RUN(test_format_buffer_too_small);
+    RUN(test_format_buffer_too_small_with_version);
 
     RUN(test_linebuf_simple_line);
     RUN(test_linebuf_crlf);

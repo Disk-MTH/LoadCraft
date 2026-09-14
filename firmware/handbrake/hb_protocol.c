@@ -336,7 +336,7 @@ size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg,
                  hb_curve_name(cfg->curve), gbuf, abuf,
                  (unsigned)cfg->calibrated);
 
-    if (version != NULL && version[0] != '\0') {
+    if (n >= 0 && (size_t)n < size && version != NULL && version[0] != '\0') {
         extra = snprintf(buf + n, size - (size_t)n, " ver=%s", version);
         if (extra < 0) {
             buf[0] = '\0';
