@@ -242,3 +242,34 @@ def test_stop_is_prompt_and_terminates_the_watchdog(clock):
     # A functioning stop flag makes the join return in milliseconds; the old
     # flagless loop always burned the full 2 s join timeout.
     assert elapsed < 1.5
+
+
+# --- Flash pause / resume ----------------------------------------------------
+
+
+def test_pause_for_flash_closes_the_link_and_blocks_scans(available, clock):
+    manager, _, _ = make_manager(available)
+    manager.run_once(clock())
+    assert manager.status()["connected"] is True
+
+    manager.pause_for_flash()
+    assert manager.link is None
+    assert manager.status()["connected"] is False
+
+    # Far past the scan cadence: a paused manager must not reconnect.
+    manager.run_once(clock(5.0))
+    assert manager.link is None
+
+
+def test_resume_flash_reconnects(available, clock):
+    manager, holder, _ = make_manager(available)
+    manager.run_once(clock())
+    assert manager.status()["connected"] is True
+
+    manager.pause_for_flash()
+    # The bootloader resets the chip: it comes back as a fresh device.
+    holder["board"] = FakeBoard()
+    manager.resume_flash()
+
+    manager.run_once(clock(2.0))  # scan cadence elapsed: reconnect
+    assert manager.status()["connected"] is True
