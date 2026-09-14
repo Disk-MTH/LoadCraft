@@ -166,15 +166,57 @@ since it lives in the board's EEPROM and not on the PC.
 
 ```bash
 sudo dnf install evtest joystick   # Fedora
-jstest /dev/input/js0              # the axis must move when you pull
+jstest /dev/input/jsX              # the axis must move when you pull
 ```
+
+`jsX` is not guaranteed to be `js0`: every gamepad the PC sees gets its
+own `jsX`. The handbrake is the device that appears when the board is
+plugged in. It enumerates as **Arduino Leonardo** (the board's FQBN name,
+USB id `2341:8036`) and presents a single X axis with no buttons:
+
+```bash
+for i in /sys/class/input/input*; do echo "$i $(cat $i/name 2>/dev/null)"; done
+```
+
+The name is fixed by the board's FQBN and cannot be changed from the
+sketch; on a machine with several Arduino boards, the handbrake is the
+one at `2341:8036` that shows up when it is plugged in.
 
 ### Windows
 
-`Win+R` → `joy.cpl` → select the device → **Properties**. The X axis must
-move when you pull the lever.
+`Win+R` → `joy.cpl` → select **Arduino Leonardo** (the handbrake:
+`2341:8036`, one axis, no buttons) → **Properties**. The X axis must move
+when you pull the lever.
 
 Once visible here, any game can map it as a handbrake.
+
+## Board LEDs
+
+The firmware does not program the LEDs: on the ATmega32u4, the Arduino
+core drives the RX and TX LEDs as a side effect of USB traffic (a 100 ms
+pulse per event), and the green LED is plain hardware. That is why the
+board "lights up" on its own - the table is about USB activity, not about
+the handbrake logic.
+
+| State | Green (USB) | RX LED | TX LED |
+|---|---|---|---|
+| Board idle, no app | on | off | 100 ms pulse per axis report (~1 Hz: looks like a fast blink or a steady glow) |
+| App connected, streaming | on | short flash when the app sends a command (GET, SET, SAVE...) | on (telemetry ~10 Hz + axis reports) |
+| App closed | on | off | back to the ~1 Hz pulse |
+| Flashing from the app | may flicker during the ~8 s bootloader window, then steady | off | off |
+| **Faulty USB state** | **may blink** | **flickers randomly** | **flickers randomly** |
+
+Notes:
+
+- Which LED is RX and which is TX (and their colors) depends on the
+  board. On the standard Leonardo-family Pro Micro the core drives the RX
+  LED from pin D17 (PB0) and the TX LED from the XCK pin (PD5).
+- The "fast blink with no app connected" is the **normal idle state**, not
+  a fault: the TX LED pulses once per HID keep-alive report.
+- The **faulty USB state** row is the one that needs action: the host's
+  USB power management can leave the board with a dead or crawling serial
+  endpoint while the HID axis still works. Power-cycle the board (unplug,
+  wait 2 s, replug) and it recovers. See **Troubleshooting** below.
 
 ## Calibration app
 
@@ -326,6 +368,59 @@ arduino.cc's official tool downloads into `dist-tools/avrdude/` (GPLv2)
 and embedded in the artifacts; on Windows it is a 32-bit PE (i686), which
 runs on Windows x64 via WOW64. A system `avrdude` on `PATH` is used as a
 fallback.
+
+## Troubleshooting
+
+### The app stays on "Connecting..." or the measurement panel shows "—"
+
+The HID axis does not need the app: the joystick can work perfectly while
+the serial link is not up. Read the status bar first - it names the cause:
+
+- `access to /dev/ttyACM0 denied` (Linux): `sudo usermod -aG dialout
+  $USER`, then log out and back in. A running instance keeps its old
+  credentials and must be fully restarted.
+- `already open by another program` (Windows): another LoadCraft instance
+  (or a serial monitor) still holds the COM port. Closing the tab ends
+  the app only a few seconds later; a second launch inside that window
+  finds the port taken. Close the other window and relaunch.
+- the board is in the faulty USB state (below): replug it, then relaunch.
+
+### The board stops talking after closing the app (Windows)
+
+Symptoms: the LEDs start flickering at random and the handbrake no longer
+answers - the app cannot connect, the joystick axis is frozen or gone -
+until the board is unplugged and replugged (see the **faulty USB state**
+row of the LED table).
+
+Cause: with no program holding the COM port, Windows USB power management
+(selective suspend) can put the port into a low-power state, and the
+32u4's USB state machine does not always survive that transition.
+
+To make it stop happening, on the gaming PC:
+
+1. Control Panel → Power Options → *Change plan settings* → *Change
+   advanced power settings* → **USB settings** → *USB selective suspend
+   setting*: **Disabled**.
+2. Device Manager → *Universal Serial Bus controllers* → the board's
+   composite device, and the USB hub/root it is plugged into →
+   Properties → *Power Management* → uncheck *Allow the computer to turn
+   off this device to save power*.
+
+The firmware side is hardened too: telemetry stops when the port is
+closed (DTR drop) instead of streaming into the void, and the app sends
+`STREAM 0` before releasing the port, so a close leaves the board in its
+idle state instead of a half-open one.
+
+### Raw value blinks between the real value and 0
+
+A 0 in the measurement panel means the board reported no valid sensor
+sample: the first ~100 ms after every reset (converter warm-up), a sensor
+that went silent (wiring, power), or a board in the faulty USB state
+above. The telemetry line carries an `s=` field (`s=0` = no valid
+sample); check the axis too - if the HID axis is frozen as well, the
+board is the suspect, not the sensor. A power-cycle clears the USB
+states; a persistent 0 with a dead axis points at the HX711 wiring
+(`docs/wiring.md`).
 
 ## Versioning
 
