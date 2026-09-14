@@ -39,7 +39,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "app[dev]"
       - name: Firmware core tests (native)
-        run: make -C tests
+        run: make -C tests test
       - name: App tests (pytest)
         run: python -m pytest app/tests -q
 
@@ -77,6 +77,10 @@ jobs:
         with:
           name: app-data
           path: app/loadcraft/data/
+      - name: Vendor the platform avrdude
+        run: |
+          mkdir -p app/loadcraft/data/avrdude
+          cp dist-tools/avrdude/avrdude.exe dist-tools/avrdude/avrdude.conf app/loadcraft/data/avrdude/
       - name: Install the build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -108,6 +112,10 @@ jobs:
         with:
           name: app-data
           path: app/loadcraft/data/
+      - name: Vendor the platform avrdude
+        run: |
+          mkdir -p app/loadcraft/data/avrdude
+          cp dist-tools/avrdude/avrdude dist-tools/avrdude/avrdude.conf app/loadcraft/data/avrdude/
       - name: Install the build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -132,6 +140,8 @@ jobs:
           mkdir -p LoadCraft.AppDir/usr/bin
           cp -r app/dist/LoadCraft/. LoadCraft.AppDir/usr/bin/
           cp dist-tools/LoadCraft.desktop dist-tools/LoadCraft.png LoadCraft.AppDir/
+          printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/usr/bin/LoadCraft" "$@"\n' > LoadCraft.AppDir/AppRun
+          chmod +x LoadCraft.AppDir/AppRun
           /tmp/appimagetool LoadCraft.AppDir
       - name: Publish the artifact
         run: |
