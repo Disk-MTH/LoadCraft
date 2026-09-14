@@ -37,7 +37,9 @@ jobs:
       - name: Install the app with its test extra
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "app[dev]"
+          # The local path (./app) is mandatory: bare "app" resolves to an
+          # unrelated third-party package on PyPI.
+          python -m pip install "./app[dev]"
       - name: Firmware core tests (native)
         run: make -C tests test
       - name: App tests (pytest)
@@ -49,9 +51,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install arduino-cli
+        # Pinned version, downloaded directly: the install script on the
+        # master branch changed its CLI (-b is no longer a flag) and broke
+        # the release builds.
         run: |
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
-            | sh -s -- -b /usr/local/bin
+          curl -fsSL -o /tmp/arduino-cli.tar.gz \
+            https://downloads.arduino.cc/arduino-cli/arduino-cli_1.5.1_Linux_64bit.tar.gz
+          sudo tar -xzf /tmp/arduino-cli.tar.gz -C /usr/local/bin arduino-cli
       - name: Install the AVR core and the Joystick library
         run: |
           arduino-cli core update-index
