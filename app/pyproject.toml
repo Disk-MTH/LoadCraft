@@ -1,6 +1,6 @@
 [project]
 name = "loadcraft"
-version = "1.0.1"
+version = "1.0.2"
 description = "Calibration app for the simracing handbrake"
 requires-python = ">=3.9"
 dependencies = [
