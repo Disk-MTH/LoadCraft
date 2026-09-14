@@ -16,13 +16,14 @@ class FakeBoard:
     trial.
     """
 
-    def __init__(self, calibrated: bool = True):
+    def __init__(self, calibrated: bool = True, ver: str | None = "1.0.0"):
         self.raw_min = 100000
         self.raw_max = 900000
         self.curve = "LINEAR"
         self.gamma = 1.0
         self.alpha = 0.5
         self.calibrated = calibrated
+        self.ver = ver
         self.current_raw = 500000
         self.streaming = False
         self.saved = None
@@ -67,11 +68,14 @@ class FakeBoard:
         self._out.put(data)
 
     def emit_config(self) -> None:
-        self.emit(
+        line = (
             f"CFG min={self.raw_min} max={self.raw_max} curve={self.curve} "
             f"gamma={self.gamma:.3f} alpha={self.alpha:.3f} "
             f"calibrated={1 if self.calibrated else 0}"
         )
+        if self.ver is not None:
+            line += f" ver={self.ver}"
+        self.emit(line)
 
     def emit_telemetry(self, raw: int | None = None) -> None:
         raw = self.current_raw if raw is None else raw
