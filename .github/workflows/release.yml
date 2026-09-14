@@ -139,9 +139,17 @@ jobs:
             --add-data "loadcraft/data:loadcraft/data" \
             --add-data "loadcraft/web:loadcraft/web" main.py
       - name: Install appimagetool and libfuse
+        # Retries: the GitHub release CDN intermittently answers 504.
         run: |
-          curl -fsSL -o /tmp/appimagetool \
-            https://github.com/AppImage/appimagetool/releases/latest/download/appimagetool-x86_64.AppImage
+          ok=0
+          for i in 1 2 3 4 5; do
+            if curl -fsSL -o /tmp/appimagetool \
+              https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+            then ok=1; break; fi
+            echo "download attempt $i failed, retrying in 20s..."
+            sleep 20
+          done
+          [ "$ok" = 1 ] || { echo "appimagetool download failed after 5 attempts"; exit 1; }
           chmod +x /tmp/appimagetool
           sudo apt-get update
           sudo apt-get install -y libfuse2t64 2>/dev/null \
