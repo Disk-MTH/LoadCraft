@@ -60,14 +60,14 @@ def test_flash_success_on_the_same_port():
     assert touched == ["/dev/ttyACM0"]
 
 
-def test_flash_command_uses_avr11_and_flash_w():
+def test_flash_command_uses_avr109_and_flash_w():
     cmds = []
     run_flash(lambda: [PORT_BOARD],
               lambda cmd: (cmds.append(list(cmd)), ok_log())[1])
     cmd = cmds[0]
     assert cmd[0] == "/fake/avrdude"
     assert cmd[cmd.index("-p") + 1] == "m32u4"
-    assert cmd[cmd.index("-c") + 1] == "avr11"
+    assert cmd[cmd.index("-c") + 1] == "avr109"
     assert cmd[cmd.index("-P") + 1] == "/dev/ttyACM0"
     assert cmd[-1] == "flash:w:/fake/handbrake.hex"
 

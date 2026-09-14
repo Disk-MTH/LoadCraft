@@ -5,9 +5,11 @@ the chip reset into its bootloader - waits for the bootloader to re-appear as
 a serial port, then runs avrdude against it. avrdude writes flash only
 (-U flash:w:), so the EEPROM - and with it the calibration - survives.
 
-avrdude is invoked with the plain ``avr11`` (stk500v1) programmer type: the
-1200-baud touch is done by this module rather than by avrdude's ``arduino``
-programmer type, so any avrdude build works.
+avrdude is invoked with the plain ``avr109`` programmer type (the AVR109
+bootloader protocol the ATmega32u4/Caterina bootloader speaks - the same
+protocol the Arduino AVR core uses for the Leonardo): the 1200-baud touch is
+done by this module rather than by avrdude's ``arduino`` programmer type, so
+any avrdude build works.
 """
 
 from __future__ import annotations
@@ -194,7 +196,7 @@ def flash(
         if conf is not None:
             cmd += ["-C", conf]
         cmd += [
-            "-q", "-p", MCU, "-c", "avr11",
+            "-q", "-p", MCU, "-c", "avr109",
             "-b", str(BOOTLOADER_BAUD), "-P", port,
             "-U", f"flash:w:{hexfile_}",
         ]
