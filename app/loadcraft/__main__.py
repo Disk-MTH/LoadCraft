@@ -41,7 +41,7 @@ def _serve(app, port: int) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="handbrake-tuner",
+        prog="loadcraft",
         description="Calibration app for the simracing handbrake.",
     )
     parser.add_argument(
@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         except ImportError:
             print(
                 "pywebview missing, opening in the browser "
-                "(pip install 'handbrake-tuner[desktop]' for a native window).",
+                "(pip install 'loadcraft[desktop]' for a native window).",
                 file=sys.stderr,
             )
 

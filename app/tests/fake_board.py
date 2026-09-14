@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 
-from handbrake_tuner import protocol
+from loadcraft import protocol
 
 
 class FakeBoard:

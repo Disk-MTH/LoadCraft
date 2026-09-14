@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from handbrake_tuner import link
+from loadcraft import link
 
 
 class FakePort:

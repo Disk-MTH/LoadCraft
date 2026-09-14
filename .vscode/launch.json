@@ -5,7 +5,7 @@
       "name": "app: launch",
       "type": "debugpy",
       "request": "launch",
-      "module": "handbrake_tuner",
+      "module": "loadcraft",
       "cwd": "${workspaceFolder}/app",
       "console": "integratedTerminal"
     },

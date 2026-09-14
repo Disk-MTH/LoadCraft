@@ -151,7 +151,7 @@ cd app
 uv venv .venv
 uv pip install --python .venv -e ".[dev]"
 .venv\Scripts\python -m pytest tests -q
-.venv\Scripts\python -m handbrake_tuner
+.venv\Scripts\python -m loadcraft
 ```
 
 The firmware is strictly identical on both systems: a calibration saved
@@ -178,7 +178,7 @@ Once visible here, any game can map it as a handbrake.
 
 ```bash
 make setup-app
-app/.venv/bin/python -m handbrake_tuner
+app/.venv/bin/python -m loadcraft
 ```
 
 Options: `--browser` (open in the browser), `--no-window` (server only),

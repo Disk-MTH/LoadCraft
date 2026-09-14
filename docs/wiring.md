@@ -91,7 +91,7 @@ They are changeable in `firmware/handbrake/config.h`.
 ```bash
 # 1. Check that the raw reading reacts
 #    (flash the firmware first, then:)
-python -m handbrake_tuner
+python -m loadcraft
 
 # 2. Lever at rest                → type the shown raw value into the Minimum field
 # 3. Pull with the maximum force  → type that raw value into the Maximum field

@@ -8,8 +8,8 @@ import math
 
 import pytest
 
-from handbrake_tuner import protocol
-from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
+from loadcraft import protocol
+from loadcraft.protocol import Ack, Config, Err, Telemetry
 
 
 # --- Reply parsing -----------------------------------------------------------

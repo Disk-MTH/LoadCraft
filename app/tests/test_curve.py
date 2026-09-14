@@ -7,7 +7,7 @@ is done on a curve that is not the one driving the axis.
 
 import pytest
 
-from handbrake_tuner import protocol
+from loadcraft import protocol
 
 CURVES = protocol.CURVES
 GAMMAS = [0.2, 0.5, 1.0, 2.0, 4.0]
