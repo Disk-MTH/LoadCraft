@@ -90,7 +90,8 @@ jobs:
           cd app
           pyinstaller --noconfirm --onefile --windowed --name LoadCraft \
             --paths . --exclude-module webview \
-            --add-data "loadcraft/data;loadcraft/data" main.py
+            --add-data "loadcraft/data;loadcraft/data" \
+            --add-data "loadcraft/web;loadcraft/web" main.py
       - name: Publish the artifact
         run: |
           mkdir -p dist
@@ -125,7 +126,8 @@ jobs:
           cd app
           pyinstaller --noconfirm --onedir --name LoadCraft \
             --paths . --exclude-module webview \
-            --add-data "loadcraft/data:loadcraft/data" main.py
+            --add-data "loadcraft/data:loadcraft/data" \
+            --add-data "loadcraft/web:loadcraft/web" main.py
       - name: Install appimagetool and libfuse
         run: |
           curl -fsSL -o /tmp/appimagetool \
