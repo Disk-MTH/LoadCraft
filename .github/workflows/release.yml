@@ -100,7 +100,10 @@ jobs:
       - name: Build the onefile exe
         run: |
           cd app
+          # --icon is mandatory: without it the exe ships the stock
+          # PyInstaller icon while the AppImage carries LoadCraft.png.
           pyinstaller --noconfirm --onefile --windowed --name LoadCraft \
+            --icon ../dist-tools/LoadCraft.ico \
             --paths . --exclude-module webview \
             --add-data "loadcraft/data;loadcraft/data" \
             --add-data "loadcraft/web;loadcraft/web" main.py

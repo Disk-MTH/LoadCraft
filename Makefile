@@ -125,6 +125,7 @@ package-win: build-hex $(VENV)
 	cp dist-tools/avrdude/avrdude.exe dist-tools/avrdude/avrdude.conf $(APP_DATA)/avrdude/
 	cd app && uv pip install --python .venv pyinstaller
 	cd app && $(PYI) --noconfirm --onefile --windowed --name LoadCraft \
+		--icon ../dist-tools/LoadCraft.ico \
 		--paths . --exclude-module webview \
 		--add-data "loadcraft/data;loadcraft/data" \
 		--add-data "loadcraft/web;loadcraft/web" main.py
