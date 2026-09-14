@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from loadcraft.flash import Flasher
@@ -172,3 +174,36 @@ def test_keepalive_registers_and_unregisters(firmware_app):
     response.response.close()  # client gone: the generator's finally runs
     assert keepalive.clients == 0
     response.close()
+
+
+# --- POST /api/goodbye -----------------------------------------------------------
+
+
+def test_goodbye_503_without_keepalive():
+    manager = LinkManager(list_ports_fn=lambda: [], connect_fn=None)
+    app = create_app(manager, keepalive=None, flasher=None)
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        assert client.post("/api/goodbye").status_code == 503
+
+
+def test_goodbye_keeps_running_while_a_client_is_open():
+    # A captured exit_fn: the endpoint under test must not end the test
+    # process, and the goodbye watcher thread is stopped before the test
+    # returns so it cannot outlive it.
+    exited = []
+    keepalive = KeepAlive(exit_fn=lambda: exited.append(1))
+    manager = LinkManager(list_ports_fn=lambda: [], connect_fn=None)
+    app = create_app(manager, keepalive=keepalive, flasher=None)
+    app.config["TESTING"] = True
+
+    keepalive.register()  # an open tab's SSE
+    with app.test_client() as client:
+        reply = client.post("/api/goodbye")
+        assert reply.status_code == 200
+        assert reply.json == {"ok": True}
+
+    time.sleep(0.6)  # the goodbye watcher polls a few times
+    assert not exited  # the client is still here: no exit
+    assert keepalive.exited is False
+    keepalive.stop()

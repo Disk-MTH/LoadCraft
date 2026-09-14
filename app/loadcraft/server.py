@@ -106,6 +106,19 @@ def create_app(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    # --- Goodbye -------------------------------------------------------------
+
+    @app.post("/api/goodbye")
+    def api_goodbye():
+        # Sent by the page on pagehide (sendBeacon): the tab is going away,
+        # so exit as soon as no client is left instead of waiting the full
+        # grace period. The beacon is best-effort - if it is lost, the
+        # keep-alive watchdog still fires once the SSE dies.
+        if keepalive is None:
+            return _error("keep-alive disabled", 503)
+        keepalive.announce_leave()
+        return jsonify({"ok": True})
+
     # --- Firmware ----------------------------------------------------------------
 
     @app.get("/api/firmware")

@@ -5,6 +5,11 @@ whole life (see the /api/keepalive endpoint); when the tab closes the
 channel dies with it. After a grace period - long enough to absorb
 EventSource reconnects and laptop sleep/wake - the process exits. Closing
 the tab is the uninstall-free way to stop the app, with no orphan server.
+
+A tab that goes away also says goodbye (the /api/goodbye beacon sent on
+pagehide): once the last client is observed gone, the process exits after a
+short settle instead of the full grace period. The grace period remains the
+fallback when no goodbye arrives (browser crash, power loss).
 """
 
 from __future__ import annotations
@@ -16,6 +21,12 @@ from typing import Callable, Optional
 
 KEEPALIVE_GRACE_SECONDS = 10.0
 WATCHDOG_INTERVAL = 1.0
+
+# Goodbye fast path: after the client count reaches zero, the process exits
+# once the count has stayed zero this long. A page reload registers its new
+# client well within the window, which cancels the exit.
+GOODBYE_SETTLE_SECONDS = 2.0
+GOODBYE_POLL_SECONDS = 0.2
 
 
 def _default_exit() -> None:
@@ -116,8 +127,42 @@ class KeepAlive:
             gone = (self._now() if now is None else now) - self._lost_at
             fire = gone >= self._grace
         if fire:
-            with self._lock:
-                if self._exited:
+            self._fire()
+
+    def announce_leave(self) -> None:
+        """A tab said goodbye (the /api/goodbye beacon sent on pagehide).
+
+        The tab's SSE is torn down asynchronously - the server only notices
+        on its next failed write - so a short-lived watcher decides the
+        exit: once the client count reaches zero it must stay zero for the
+        settle window before the process ends. A client registering within
+        that window (a page reload) cancels the exit, and the normal
+        watchdog owns the lifecycle from then on.
+        """
+        if self._stop.is_set() or self.exited:
+            return
+        threading.Thread(
+            target=self._goodbye_wait, name="keepalive-goodbye", daemon=True
+        ).start()
+
+    def _goodbye_wait(self) -> None:
+        absent_since = None
+        while not self._stop.is_set() and not self.exited:
+            if self.clients > 0:
+                absent_since = None
+            else:
+                now = self._now()
+                if absent_since is None:
+                    absent_since = now
+                elif now - absent_since >= GOODBYE_SETTLE_SECONDS:
+                    self._fire()
                     return
-                self._exited = True
-            self._exit()
+            time.sleep(GOODBYE_POLL_SECONDS)
+
+    def _fire(self) -> None:
+        """Exits now, but only if no client is left."""
+        with self._lock:
+            if self._exited or self._clients > 0:
+                return
+            self._exited = True
+        self._exit()

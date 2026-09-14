@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from loadcraft import lifecycle
 
 
@@ -95,3 +97,54 @@ def test_multiple_clients_exit_only_when_all_gone():
         clock(1.0)
         ka.check()
     assert exited == [1]
+
+
+# --- Goodbye fast path ------------------------------------------------------------
+
+
+def test_goodbye_exits_fast_when_last_client_is_gone():
+    clock = make_clock()
+    ka, exited = make_ka(clock)
+    ka.register()
+    ka.announce_leave()
+    time.sleep(0.4)  # the watcher runs while the client is still present
+    ka.unregister()  # the tab's SSE is torn down on the server side
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline and not exited:
+        clock(0.5)  # settle window elapses on the (fake) clock
+        time.sleep(0.1)
+    assert exited == [1]
+    assert ka.exited is True
+
+
+def test_goodbye_cancelled_when_a_client_comes_back():
+    clock = make_clock()
+    ka, exited = make_ka(clock)
+    ka.register()
+    ka.announce_leave()
+    time.sleep(0.4)
+    ka.unregister()
+    clock(0.5)
+    time.sleep(0.3)  # the watcher has recorded the absence
+    ka.register()  # page reload: a new client within the settle window
+    for _ in range(6):
+        clock(0.5)
+        time.sleep(0.1)
+    assert not exited
+    assert ka.clients == 1
+    ka.unregister()
+    ka.stop()  # quiet the goodbye watcher for the next tests
+
+
+def test_goodbye_does_not_exit_while_another_tab_is_open():
+    clock = make_clock()
+    ka, exited = make_ka(clock)
+    ka.register()
+    ka.register()
+    ka.announce_leave()
+    ka.unregister()  # one of the two tabs closed
+    for _ in range(8):
+        clock(0.5)
+        time.sleep(0.1)
+    assert not exited  # the other tab is still connected
+    ka.stop()

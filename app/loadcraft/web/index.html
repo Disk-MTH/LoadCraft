@@ -782,6 +782,14 @@ async function pollStatus() {
   setInterval(pollFirmware, 2000);
 })();
 
+/* Closing the tab or window is the "close app" action: the beacon tells
+   the server the page is gone so it can quit right away. Best-effort by
+   design - if it is lost (browser crash, power loss) the keep-alive
+   watchdog still ends the process once this page's SSE dies. */
+window.addEventListener("pagehide", () => {
+  navigator.sendBeacon("/api/goodbye");
+});
+
 window.addEventListener("beforeunload", () => {
   if (state.events) {
     state.events.close();
