@@ -68,11 +68,25 @@ def _serve(app, port: int) -> None:
     app.run(host="127.0.0.1", port=port, threaded=True, debug=False)
 
 
+class _NullStream:
+    """File-like sink that drops everything written to it.
+
+    Used when there is no console (PyInstaller `--windowed` builds set
+    sys.stdout/sys.stderr to None).
+    """
+
+    def write(self, data) -> None:
+        pass
+
+    def flush(self) -> None:
+        pass
+
+
 class _Tee:
     """Writes to two streams: the console (when there is one) and the log."""
 
     def __init__(self, primary, secondary) -> None:
-        self._primary = primary
+        self._primary = primary if primary is not None else _NullStream()
         self._secondary = secondary
 
     def write(self, data) -> None:

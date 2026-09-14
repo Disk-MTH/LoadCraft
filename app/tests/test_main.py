@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
+
 import pytest
 
-from loadcraft.__main__ import build_parser
+from loadcraft.__main__ import _Tee, build_parser
 
 
 def test_default_is_browser():
@@ -29,3 +31,22 @@ def test_no_window_flag_with_port():
 def test_browser_flag_removed():
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--browser"])
+
+
+def test_tee_with_no_console():
+    # Packaged GUI builds (PyInstaller --windowed) have sys.stdout/sys.stderr
+    # set to None: a _Tee built from them must not crash and still logs.
+    log = io.StringIO()
+    tee = _Tee(None, log)
+    tee.write("hello\n")
+    tee.flush()
+    assert log.getvalue() == "hello\n"
+
+
+def test_tee_with_console():
+    console = io.StringIO()
+    log = io.StringIO()
+    tee = _Tee(console, log)
+    tee.write("hi")
+    assert console.getvalue() == "hi"
+    assert log.getvalue() == "hi"
