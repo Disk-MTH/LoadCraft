@@ -11,6 +11,13 @@
  * See docs/design.md for the design and docs/wiring.md for the wiring.
  */
 
+/* The USB product string is not set here: it is baked in by the board's
+ * FQBN (a `leonardo` build enumerates as "Arduino Leonardo", its `micro`
+ * twin as "Arduino Micro"). That is the name the host shows in its game
+ * controller list; a #define in the sketch cannot reach the core's USB
+ * descriptor (a separate compilation unit). See the README for how to tell
+ * the handbrake apart from other boards. */
+
 #include <Joystick.h>
 
 #include "config.h"
@@ -45,6 +52,10 @@ static uint32_t last_sample_ms = 0;
 static uint32_t last_report_ms = 0;
 static uint32_t last_telem_ms  = 0;
 
+/* Last time DTR was observed high: the host asserts it while the port is
+ * open and drops it on close. */
+static uint32_t dtr_up_ms      = 0;
+
 /* The very first conversions after power-up come out before the HX711 input
  * stage has settled. Skipping them prevents a "SET MIN" issued too early
  * from freezing a bad calibration. */
@@ -55,11 +66,47 @@ static uint8_t       warmup_left    = WARMUP_SAMPLES;
 
 static void reply(const char *text)
 {
-    /* Writing while no host has opened the port would fill the CDC buffer
-     * and eventually block the loop, and with it the HID axis. */
-    if (Serial) {
-        Serial.println(text);
+    /* The core's write() transmits only while the host holds the port open
+     * (DTR asserted) and drops the bytes otherwise, the way a UART would:
+     * a closed port can never fill the CDC buffer or stall the loop.
+     * `if (Serial)` would not be a check here: on this core the bool
+     * conversion runs a blocking 10 ms delay on every call.
+     *
+     * The newline is appended and the whole line goes out in one write:
+     * the core would otherwise split string, CR and LF into separate
+     * blocking endpoint transactions. */
+    static char line[HB_REPLY_MAX + 1];
+    size_t n = strlen(text);
+    memcpy(line, text, n);
+    line[n] = '\n';
+    Serial.write((const uint8_t *)line, (unsigned int)n + 1);
+}
+
+/* Best-effort, non-blocking variant of reply(): the line goes out only if
+ * it fits the space free in the CDC endpoint right now, otherwise it is
+ * dropped. The periodic telemetry uses it: it is a UI feed, not a
+ * request, so it must never stall the main loop (and with it the sensor
+ * and the HID axis) waiting on a host that is slow or gone. Command
+ * responses keep the blocking reply(); the host is actively waiting for
+ * those.
+ *
+ * A telemetry line is always shorter than one 64-byte endpoint packet, so
+ * checking the whole line fits is enough to guarantee the write never
+ * blocks (unlike a full CFG line, which spans two packets and must block). */
+static bool try_reply(const char *text)
+{
+    static char line[HB_REPLY_MAX + 1];
+    size_t      n = strlen(text) + 1; /* the line plus its newline */
+
+    if (Serial.availableForWrite() < (int)n) {
+        return false;
     }
+
+    size_t len = n - 1;
+    memcpy(line, text, len);
+    line[len] = '\n';
+    Serial.write((const uint8_t *)line, (unsigned int)n);
+    return true;
 }
 
 static void send_config()
@@ -93,7 +140,10 @@ static void send_telemetry()
 
     if (hb_format_telemetry(buf, sizeof buf, filtered_raw, unit,
                             hb_axis_from_unit(unit), have_sample)) {
-        reply(buf);
+        /* Non-blocking: when the CDC endpoint is busy the frame is dropped
+         * instead of stalling the loop, keeping the sensor and the HID axis
+         * at full rate. */
+        try_reply(buf);
     }
 }
 
@@ -295,11 +345,25 @@ void loop()
     poll_serial();
     update_axis();
 
+    if (Serial.dtr()) {
+        dtr_up_ms = millis();
+    }
+
     if (streaming) {
-        uint32_t now = millis();
-        if ((now - last_telem_ms) >= HB_TELEMETRY_PERIOD_MS) {
-            last_telem_ms = now;
-            send_telemetry();
+        if (!Serial.dtr()
+            && (millis() - dtr_up_ms) >= DTR_CLOSE_GRACE_MS) {
+            /* The port was closed: stop streaming. The core already drops
+             * writes to a closed port; halting the periodic work returns
+             * the board to its idle state (HID only). The app re-sends
+             * STREAM 1 on every (re)connect, so a false positive
+             * self-heals. */
+            streaming = false;
+        } else {
+            uint32_t now = millis();
+            if ((now - last_telem_ms) >= HB_TELEMETRY_PERIOD_MS) {
+                last_telem_ms = now;
+                send_telemetry();
+            }
         }
     }
 }

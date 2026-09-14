@@ -22,10 +22,17 @@
 
 /* --- Rates -------------------------------------------------------------- */
 
-/* Telemetry emission period while streaming is active. Throttled so the CDC
- * must not take precedence over the HID loop; between two sensor readings it
- * simply resends the last filtered value. */
-#define HB_TELEMETRY_PERIOD_MS 33 /* ~30 Hz */
+/* Telemetry emission period while streaming is active. A frame is sent
+ * best-effort and non-blocking (try_reply in the sketch): when the CDC
+ * endpoint is busy the frame is dropped rather than stalling the loop, so
+ * this is a target rate, not a blocking budget - the sensor and the HID
+ * axis are never delayed by it. Between two sensor readings it simply
+ * resends the last filtered value. */
+#define HB_TELEMETRY_PERIOD_MS 100 /* 10 Hz */
+
+/* A port close (DTR dropped) is only acted on after it has stayed dropped
+ * this long: most hosts flutter DTR briefly while opening the port. */
+#define DTR_CLOSE_GRACE_MS 500
 
 /* The HID report is sent only when the axis value changed, with this
  * maximum delay between two sends to keep the host in step even while
