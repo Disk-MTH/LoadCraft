@@ -105,7 +105,8 @@ package-linux: build-hex $(VENV)
 	cd app && uv pip install --python .venv pyinstaller
 	cd app && $(PYI) --noconfirm --onedir --name LoadCraft \
 		--paths . --exclude-module webview \
-		--add-data "loadcraft/data:loadcraft/data" main.py
+		--add-data "loadcraft/data:loadcraft/data" \
+		--add-data "loadcraft/web:loadcraft/web" main.py
 	python3 scripts/make_icon.py dist-tools/LoadCraft.png
 	rm -rf app/dist/LoadCraft.AppDir
 	mkdir -p app/dist/LoadCraft.AppDir/usr/bin
@@ -125,7 +126,8 @@ package-win: build-hex $(VENV)
 	cd app && uv pip install --python .venv pyinstaller
 	cd app && $(PYI) --noconfirm --onefile --windowed --name LoadCraft \
 		--paths . --exclude-module webview \
-		--add-data "loadcraft/data;loadcraft/data" main.py
+		--add-data "loadcraft/data;loadcraft/data" \
+		--add-data "loadcraft/web;loadcraft/web" main.py
 	mkdir -p dist
 	mv app/dist/LoadCraft.exe "dist/LoadCraft-$(VERSION)-windows-x64.exe"
 	@echo "Exe -> dist/LoadCraft-$(VERSION)-windows-x64.exe"
