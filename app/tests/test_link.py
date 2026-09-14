@@ -8,9 +8,9 @@ import time
 
 import pytest
 
-from handbrake_tuner import protocol
-from handbrake_tuner.link import LinkError, SerialLink
-from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
+from loadcraft import protocol
+from loadcraft.link import LinkError, SerialLink
+from loadcraft.protocol import Ack, Config, Err, Telemetry
 
 from fake_board import FakeBoard
 

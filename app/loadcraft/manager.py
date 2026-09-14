@@ -51,6 +51,7 @@ class LinkManager:
         self._port: Optional[str] = None
         self._port_description: Optional[str] = None
         self._last_scan = 0.0
+        self._flash_active = False
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
@@ -85,8 +86,14 @@ class LinkManager:
         """One watchdog iteration.
 
         With a live link: drop it if it died. Without: scan the ports on the
-        scan cadence and try to connect to the handbrake.
+        scan cadence and try to connect to the handbrake. Suppressed while a
+        flash is in progress: the port belongs to the flashing tool.
         """
+        with self._lock:
+            flash_active = self._flash_active
+        if flash_active:
+            return
+
         with self._lock:
             link = self._link
             if link is not None:
@@ -142,6 +149,24 @@ class LinkManager:
             self._last_error = None
         if link is not None:
             link.close()
+
+    # --- Flash window -------------------------------------------------------
+
+    def pause_for_flash(self) -> None:
+        """Stops the scans and closes the link.
+
+        The serial port is released to the flashing tool (flash.py); the
+        manager stays out of the way until resume_flash().
+        """
+        with self._lock:
+            self._flash_active = True
+        self._drop_link()
+
+    def resume_flash(self) -> None:
+        """Ends the flash window: the next iteration scans immediately."""
+        with self._lock:
+            self._flash_active = False
+            self._last_scan = 0.0
 
     def _set_state(self, state: str) -> None:
         with self._lock:

@@ -10,9 +10,9 @@ import time
 
 import pytest
 
-from handbrake_tuner.link import LinkError, SerialLink
-from handbrake_tuner.manager import LinkManager
-from handbrake_tuner.server import create_app
+from loadcraft.link import LinkError, SerialLink
+from loadcraft.manager import LinkManager
+from loadcraft.server import create_app
 
 from fake_board import FakeBoard
 

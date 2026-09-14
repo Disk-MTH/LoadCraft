@@ -316,11 +316,13 @@ size_t hb_fmt_fixed(char *buf, size_t size, float value, uint8_t decimals)
     return len;
 }
 
-size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg)
+size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg,
+                        const char *version)
 {
     char gbuf[16];
     char abuf[16];
     int  n;
+    int  extra;
 
     if (buf == NULL || size == 0) {
         return 0;
@@ -333,6 +335,15 @@ size_t hb_format_config(char *buf, size_t size, const hb_config_t *cfg)
                  (long)cfg->raw_min, (long)cfg->raw_max,
                  hb_curve_name(cfg->curve), gbuf, abuf,
                  (unsigned)cfg->calibrated);
+
+    if (n >= 0 && (size_t)n < size && version != NULL && version[0] != '\0') {
+        extra = snprintf(buf + n, size - (size_t)n, " ver=%s", version);
+        if (extra < 0) {
+            buf[0] = '\0';
+            return 0;
+        }
+        n += extra;
+    }
 
     if (n < 0 || (size_t)n >= size) {
         buf[0] = '\0';

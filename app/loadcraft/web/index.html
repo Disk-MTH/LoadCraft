@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Handbrake calibration</title>
+<title>LoadCraft</title>
 <style>
   :root {
     --bg: #12151a;
@@ -171,6 +171,26 @@
   .actions button.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
   .dirty-flag { color: var(--warn); font-size: 12px; margin-top: 12px; min-height: 18px; }
 
+  /* --- Firmware ------------------------------------------------------------ */
+
+  .firmware-row { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .firmware-cell { display: flex; flex-direction: column; gap: 2px; }
+  .firmware-cell .label {
+    font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .firmware-cell .value { font-family: var(--mono); font-size: 16px; }
+  .firmware-cell .value.ok   { color: var(--ok); }
+  .firmware-cell .value.warn { color: var(--warn); }
+  .firmware-cell .value.muted{ color: var(--muted); }
+  #flash-btn { margin-left: auto; }
+  #flash-log {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--panel-alt); border: 1px solid var(--line);
+    border-radius: 6px; padding: 10px; margin: 12px 0 0;
+    white-space: pre-wrap; max-height: 180px; overflow: auto;
+  }
+
   /* --- Status bar ---------------------------------------------------------------- */
 
   #status {
@@ -187,7 +207,7 @@
 
 <div class="layout">
 
-  <h1 class="span-2">Handbrake — calibration</h1>
+  <h1 class="span-2">LoadCraft — handbrake calibration</h1>
 
   <section class="panel span-2">
     <h2>Status</h2>
@@ -273,6 +293,23 @@
     </p>
   </section>
 
+  <section class="panel span-2" id="firmware-panel">
+    <h2>Firmware</h2>
+    <div class="firmware-row">
+      <div class="firmware-cell"><span class="label">App</span><span class="value" id="fw-app">—</span></div>
+      <div class="firmware-cell"><span class="label">Board</span><span class="value" id="fw-board">—</span></div>
+      <div class="firmware-cell"><span class="label">Status</span><span class="value" id="fw-status">—</span></div>
+      <button id="flash-btn" class="primary">Flash firmware</button>
+    </div>
+    <pre id="flash-log" class="hidden"></pre>
+    <p class="hint">
+      The flash reboots the board for a few seconds; the app reconnects on
+      its own. The calibration (EEPROM) is not touched. If the flash fails:
+      close any serial monitor, check the dialout group on Linux, or
+      double-tap RESET right before the flash starts.
+    </p>
+  </section>
+
   <div class="span-2" id="status">—</div>
 </div>
 
@@ -285,8 +322,15 @@ const state = {
   status: null,     /* last /api/status payload */
   config: null,
   telemetry: null,
+  firmware: null,   /* last /api/firmware payload */
+  flashing: false,
   events: null,
 };
+
+/* --- Keep-alive: the app process exits when the page goes away ------------- */
+
+const keepalive = new EventSource("/api/keepalive");
+/* onerror: the EventSource reconnects by itself. */
 
 /* HX711 24-bit signed range: the same bounds the firmware clamps to. */
 const RAW_MIN = -8388608;
@@ -338,6 +382,63 @@ async function guard(action, successMessage) {
     return null;
   }
 }
+
+/* --- Firmware ----------------------------------------------------------------- */
+
+const FW_STATUS = {
+  "up-to-date": ["Up to date", "ok"],
+  mismatch: ["Flash recommended", "warn"],
+  "board-unknown": ["Unknown board version", "muted"],
+  "not-connected": ["Not connected", "muted"],
+};
+
+async function pollFirmware() {
+  let data;
+  try {
+    data = await api("/api/firmware");
+  } catch (error) {
+    return; /* server unreachable: keep the current UI */
+  }
+  state.firmware = data;
+  renderFirmware();
+}
+
+function renderFirmware() {
+  const fw = state.firmware;
+  if (!fw) return;
+  el("fw-app").textContent = fw.app_version;
+  el("fw-board").textContent = fw.board_fw_version || "—";
+  const [label, color] = FW_STATUS[fw.status] || [fw.status, "muted"];
+  const node = el("fw-status");
+  node.textContent = label;
+  node.className = "value " + color;
+  el("flash-btn").disabled = fw.status === "not-connected" || state.flashing;
+}
+
+el("flash-btn").addEventListener("click", async () => {
+  state.flashing = true;
+  el("flash-btn").textContent = "Flashing...";
+  renderFirmware(); /* disables the button */
+  el("flash-log").classList.add("hidden");
+  setStatus("Flashing the board: the handbrake drops for a few seconds...", "ok");
+  try {
+    const response = await fetch("/api/flash", { method: "POST" });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setStatus("Firmware flashed. The board reboots with the new version.", "ok");
+      await pollFirmware();
+    } else {
+      setStatus("Flash failed - details below.", "err");
+      el("flash-log").textContent = payload.error || `error ${response.status}`;
+      el("flash-log").classList.remove("hidden");
+    }
+  } catch (error) {
+    setStatus(error.message, "err");
+  }
+  state.flashing = false;
+  el("flash-btn").textContent = "Flash firmware";
+  renderFirmware();
+});
 
 /* --- Rendering ----------------------------------------------------------- */
 
@@ -676,13 +777,18 @@ async function pollStatus() {
   openStream();
   await pollStatus();
   drawCurve();
+  pollFirmware();
   setInterval(pollStatus, 1000);
+  setInterval(pollFirmware, 2000);
 })();
 
 window.addEventListener("beforeunload", () => {
   if (state.events) {
     state.events.close();
     state.events = null;
+  }
+  if (keepalive) {
+    keepalive.close();
   }
 });
 </script>

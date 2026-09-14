@@ -8,8 +8,8 @@ import math
 
 import pytest
 
-from handbrake_tuner import protocol
-from handbrake_tuner.protocol import Ack, Config, Err, Telemetry
+from loadcraft import protocol
+from loadcraft.protocol import Ack, Config, Err, Telemetry
 
 
 # --- Reply parsing -----------------------------------------------------------
@@ -189,3 +189,31 @@ def test_parse_telemetry_sensor_defaults_to_present():
     parses, treated as having a valid sample."""
     message = protocol.parse_line("T raw=123456 out=0.750 axis=767")
     assert message.sensor is True
+
+
+# --- Optional firmware version -------------------------------------------------
+
+CFG_NO_VER = (
+    "CFG min=100 max=900 curve=LINEAR gamma=1.000 alpha=0.500 calibrated=1"
+)
+
+
+def test_config_ver_parsed():
+    msg = protocol.parse_line(CFG_NO_VER + " ver=1.0.0")
+    assert msg.ver == "1.0.0"
+
+
+def test_config_ver_absent_is_none():
+    msg = protocol.parse_line(CFG_NO_VER)
+    assert msg.ver is None
+
+
+def test_config_as_dict_includes_ver():
+    msg = protocol.parse_line(CFG_NO_VER + " ver=2.1.0")
+    assert msg.as_dict()["ver"] == "2.1.0"
+
+
+def test_config_unknown_fields_ignored():
+    msg = protocol.parse_line(CFG_NO_VER + " ver=1.0.0 extra=42")
+    assert msg is not None
+    assert msg.ver == "1.0.0"

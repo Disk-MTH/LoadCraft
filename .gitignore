@@ -4,6 +4,13 @@ build/
 *.elf
 *.hex
 *.bin
+firmware/handbrake/version.h
+app/*.spec
+
+# Generated app data (populated by `make build-hex` / `make package-*`)
+app/loadcraft/_version.py
+app/loadcraft/data/
+dist/
 
 # Python
 __pycache__/

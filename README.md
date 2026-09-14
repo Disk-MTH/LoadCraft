@@ -1,9 +1,11 @@
-# Progressive handbrake for simracing
+# LoadCraft — progressive handbrake for simracing
 
 Load-cell handbrake, seen by the PC as a **native USB HID device**: no
 driver, no software to keep running during gameplay. It appears in
 Windows "Game Controllers" like a store-bought handbrake, and can be
 mapped like any other axis.
+
+**LoadCraft** is the project name; the handbrake is its first device.
 
 ```
 Load cell 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> PC
@@ -52,7 +54,7 @@ firmware/handbrake/   firmware ATmega32u4
   hx711.cpp           sensor driver                         ← hardware
   hb_storage.cpp      EEPROM access                         ← hardware
   handbrake.ino       main loop, HID                        ← hardware
-app/                  calibration app (Python)
+app/                  calibration app (Python, package loadcraft)
 tests/                native tests of the firmware core (gcc)
 docs/                 design and wiring
 ```
@@ -151,7 +153,7 @@ cd app
 uv venv .venv
 uv pip install --python .venv -e ".[dev]"
 .venv\Scripts\python -m pytest tests -q
-.venv\Scripts\python -m handbrake_tuner
+.venv\Scripts\python -m loadcraft
 ```
 
 The firmware is strictly identical on both systems: a calibration saved
@@ -178,19 +180,21 @@ Once visible here, any game can map it as a handbrake.
 
 ```bash
 make setup-app
-app/.venv/bin/python -m handbrake_tuner
+app/.venv/bin/python -m loadcraft
 ```
 
-Options: `--browser` (open in the browser), `--no-window` (server only),
-`--port N` (fixed HTTP port). The server only listens on `127.0.0.1`.
+The browser is the default interface on both systems: closing the tab
+closes the app (about 10 s grace). Options: `--window` (native window,
+needs the `desktop` extra), `--no-window` (server only, never auto-exits),
+`--port N` (fixed HTTP port, 0 = automatic). The server only listens on
+`127.0.0.1`.
 
-`make setup-app` installs `pywebview`, which displays the interface in a
-native window. If it is absent, the app falls back to the default browser
-instead of refusing to start: handy for troubleshooting, but that is also
-what happens if the native window installation failed without you
-noticing.
+`make setup-app` installs `pywebview` for the `--window` mode. Without
+the extra, `--window` falls back to the default browser with a stderr
+note instead of refusing to start.
 
-Under **Linux**, this window relies on WebKitGTK via PyGObject. PyGObject
+Under **Linux**, the `--window` mode relies on WebKitGTK via PyGObject.
+PyGObject
 does not install cleanly via pip without a full build toolchain, while the
 system library is almost always already present: that is why the virtual
 environment is created with `--system-site-packages`. If the native window
@@ -278,3 +282,55 @@ you update the AVR core, adjust the version number.
 
 - `docs/design.md`: design, technical choices and their reasons
 - `docs/wiring.md`: wiring, checks, first startup
+
+## Packaging and release
+
+The app ships as a portable single file per OS, built by GitHub Actions on
+tag push (`v<version>`):
+
+- `LoadCraft-<ver>-windows-x64.exe` (Windows)
+- `LoadCraft-<ver>-linux.AppImage` (Linux)
+
+**Install:** copy the file anywhere and run it. **Uninstall:** delete it.
+No installer, no local state — the calibration lives in the board EEPROM.
+
+- The app opens your default browser; **closing the tab closes the app**
+  (about 10 s grace).
+- The `.exe` is unsigned: the first launch shows the Windows SmartScreen
+  warning — *More info → Run*.
+- Startup problems (the tab says "connection refused") are logged to
+  `%TEMP%\loadcraft.log` (Windows) or `/tmp/loadcraft.log` (Linux).
+- Linux: `dialout` group access is still required for the serial port
+  (`sudo usermod -aG dialout $USER`), as for the source build.
+
+## Flashing the firmware from the app
+
+The app bundles the matching firmware (app version = firmware version) and
+can flash the board through its built-in bootloader:
+
+1. Connect the board, open the **Firmware** panel.
+2. The panel shows the app and board versions and a status badge
+   (*Up to date* / *Flash recommended* / *Unknown board version*).
+3. Click **Flash firmware**: the app resets the board into the bootloader
+   (1200-baud touch), writes the firmware with the bundled avrdude, and the
+   board reboots with the new version. The app reconnects automatically.
+
+The flash writes flash memory only: the EEPROM calibration is preserved.
+If the flash fails: close any serial monitor holding the port, check the
+`dialout` group (Linux), or double-tap the RESET button right before the
+flash starts (manual bootloader entry, ~8 s window).
+
+The vendored avrdude 8.0-arduino.1 is the same avrdude arduino-cli's AVR
+package ships (pinned by Arduino AVR Boards 1.8.8), vendored from
+arduino.cc's official tool downloads into `dist-tools/avrdude/` (GPLv2)
+and embedded in the artifacts; on Windows it is a 32-bit PE (i686), which
+runs on Windows x64 via WOW64. A system `avrdude` on `PATH` is used as a
+fallback.
+
+## Versioning
+
+The version in `app/pyproject.toml` is the single source of truth. Release
+tags must equal it (the CI gate fails otherwise). `make build-hex`
+generates `firmware/handbrake/version.h` and `app/loadcraft/_version.py`
+from it; the firmware reports the version in the `CFG` line (`ver=...`) and
+the app compares it with the bundled firmware.

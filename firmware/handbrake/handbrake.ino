@@ -18,6 +18,7 @@
 #include "hb_protocol.h"
 #include "hb_storage.h"
 #include "hx711.h"
+#include "version.h"
 
 /* A single X axis. Everything else is removed from the HID descriptor:
  * shorter report and better host compatibility. */
@@ -64,7 +65,7 @@ static void reply(const char *text)
 static void send_config()
 {
     char buf[HB_REPLY_MAX];
-    if (hb_format_config(buf, sizeof buf, &config)) {
+    if (hb_format_config(buf, sizeof buf, &config, HB_FW_VERSION)) {
         reply(buf);
     }
 }

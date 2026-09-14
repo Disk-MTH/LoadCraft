@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from handbrake_tuner.link import SerialLink
+from loadcraft.link import SerialLink
 
 from fake_board import FakeBoard
 

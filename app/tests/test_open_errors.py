@@ -11,7 +11,7 @@ import errno
 
 import pytest
 
-from handbrake_tuner.link import _open_failure_hint
+from loadcraft.link import _open_failure_hint
 
 
 class FakeSerialException(OSError):

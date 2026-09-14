@@ -1,6 +1,6 @@
 [project]
-name = "handbrake-tuner"
-version = "0.1.0"
+name = "loadcraft"
+version = "1.0.0"
 description = "Calibration app for the simracing handbrake"
 requires-python = ">=3.9"
 dependencies = [
@@ -16,17 +16,17 @@ desktop = ["pywebview>=5.0"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-handbrake-tuner = "handbrake_tuner.__main__:main"
+loadcraft = "loadcraft.__main__:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["handbrake_tuner*"]
+include = ["loadcraft*"]
 
 [tool.setuptools.package-data]
-handbrake_tuner = ["web/*"]
+loadcraft = ["web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
