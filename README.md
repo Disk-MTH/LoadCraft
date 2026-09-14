@@ -183,16 +183,18 @@ make setup-app
 app/.venv/bin/python -m loadcraft
 ```
 
-Options: `--browser` (open in the browser), `--no-window` (server only),
-`--port N` (fixed HTTP port). The server only listens on `127.0.0.1`.
+The browser is the default interface on both systems: closing the tab
+closes the app (about 10 s grace). Options: `--window` (native window,
+needs the `desktop` extra), `--no-window` (server only, never auto-exits),
+`--port N` (fixed HTTP port, 0 = automatic). The server only listens on
+`127.0.0.1`.
 
-`make setup-app` installs `pywebview`, which displays the interface in a
-native window. If it is absent, the app falls back to the default browser
-instead of refusing to start: handy for troubleshooting, but that is also
-what happens if the native window installation failed without you
-noticing.
+`make setup-app` installs `pywebview` for the `--window` mode. Without
+the extra, `--window` falls back to the default browser with a stderr
+note instead of refusing to start.
 
-Under **Linux**, this window relies on WebKitGTK via PyGObject. PyGObject
+Under **Linux**, the `--window` mode relies on WebKitGTK via PyGObject.
+PyGObject
 does not install cleanly via pip without a full build toolchain, while the
 system library is almost always already present: that is why the virtual
 environment is created with `--system-site-packages`. If the native window
