@@ -347,7 +347,16 @@ Observed at first plug-in, sensor not wired: the telemetry stably returns
 this result; without it, the floating input would have surfaced noise
 presented as a measurement (see §3.1).
 
-## 12. Out of scope (v1)
+## 12. Packaging and in-app flash (2026-09-13)
+
+The app is distributed as a portable Windows `.exe` and a Linux AppImage
+(browser-tab UI, close-tab-exit lifecycle), and can flash the firmware
+through the built-in bootloader via the bundled avrdude. The firmware
+reports its version in the CFG line; the version flows from
+`app/pyproject.toml` into both the firmware and the app. Full design:
+`docs/superpowers/specs/2026-09-13-loadcraft-packaging-flash-design.md`.
+
+## 13. Out of scope (v1)
 
 - **Bluetooth / wireless**: the ATmega32u4 has no radio. A complete wireless
   handbrake would require another MCU (ESP32 and BLE HID) and another

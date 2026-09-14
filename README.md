@@ -54,7 +54,7 @@ firmware/handbrake/   firmware ATmega32u4
   hx711.cpp           sensor driver                         ← hardware
   hb_storage.cpp      EEPROM access                         ← hardware
   handbrake.ino       main loop, HID                        ← hardware
-app/                  calibration app (Python)
+app/                  calibration app (Python, package loadcraft)
 tests/                native tests of the firmware core (gcc)
 docs/                 design and wiring
 ```
@@ -280,3 +280,55 @@ you update the AVR core, adjust the version number.
 
 - `docs/design.md`: design, technical choices and their reasons
 - `docs/wiring.md`: wiring, checks, first startup
+
+## Packaging and release
+
+The app ships as a portable single file per OS, built by GitHub Actions on
+tag push (`v<version>`):
+
+- `LoadCraft-<ver>-windows-x64.exe` (Windows)
+- `LoadCraft-<ver>-linux.AppImage` (Linux)
+
+**Install:** copy the file anywhere and run it. **Uninstall:** delete it.
+No installer, no local state — the calibration lives in the board EEPROM.
+
+- The app opens your default browser; **closing the tab closes the app**
+  (about 10 s grace).
+- The `.exe` is unsigned: the first launch shows the Windows SmartScreen
+  warning — *More info → Run*.
+- Startup problems (the tab says "connection refused") are logged to
+  `%TEMP%\loadcraft.log` (Windows) or `/tmp/loadcraft.log` (Linux).
+- Linux: `dialout` group access is still required for the serial port
+  (`sudo usermod -aG dialout $USER`), as for the source build.
+
+## Flashing the firmware from the app
+
+The app bundles the matching firmware (app version = firmware version) and
+can flash the board through its built-in bootloader:
+
+1. Connect the board, open the **Firmware** panel.
+2. The panel shows the app and board versions and a status badge
+   (*Up to date* / *Flash recommended* / *Unknown board version*).
+3. Click **Flash firmware**: the app resets the board into the bootloader
+   (1200-baud touch), writes the firmware with the bundled avrdude, and the
+   board reboots with the new version. The app reconnects automatically.
+
+The flash writes flash memory only: the EEPROM calibration is preserved.
+If the flash fails: close any serial monitor holding the port, check the
+`dialout` group (Linux), or double-tap the RESET button right before the
+flash starts (manual bootloader entry, ~8 s window).
+
+The vendored avrdude 8.0-arduino.1 is the same avrdude arduino-cli's AVR
+package ships (pinned by Arduino AVR Boards 1.8.8), vendored from
+arduino.cc's official tool downloads into `dist-tools/avrdude/` (GPLv2)
+and embedded in the artifacts; on Windows it is a 32-bit PE (i686), which
+runs on Windows x64 via WOW64. A system `avrdude` on `PATH` is used as a
+fallback.
+
+## Versioning
+
+The version in `app/pyproject.toml` is the single source of truth. Release
+tags must equal it (the CI gate fails otherwise). `make build-hex`
+generates `firmware/handbrake/version.h` and `app/loadcraft/_version.py`
+from it; the firmware reports the version in the `CFG` line (`ver=...`) and
+the app compares it with the bundled firmware.
