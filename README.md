@@ -1,9 +1,11 @@
-# Progressive handbrake for simracing
+# LoadCraft — progressive handbrake for simracing
 
 Load-cell handbrake, seen by the PC as a **native USB HID device**: no
 driver, no software to keep running during gameplay. It appears in
 Windows "Game Controllers" like a store-bought handbrake, and can be
 mapped like any other axis.
+
+**LoadCraft** is the project name; the handbrake is its first device.
 
 ```
 Load cell 20 kg ──> HX711 ──> Pro Micro (ATmega32u4) ──USB-C──> PC

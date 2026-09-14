@@ -3,6 +3,8 @@
 Load-cell simracing handbrake, seen by the PC as a native USB HID device
 (no driver, no software to keep running during gameplay).
 
+**LoadCraft** is the project name; the handbrake is its first device.
+
 ## 1. Hardware
 
 | Part | Reference | Role |
