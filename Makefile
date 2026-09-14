@@ -67,6 +67,9 @@ flash:
 # the pyproject version (the CI release tag) - a mismatch is an error.
 # arduino-cli names the main output <sketch>.ino.hex (1.5+) or
 # <sketch>.ino.<fqbn>.hex (1.0-1.4); the recipe tries both names.
+# The recipe shell runs with `set -e`: any failing step (write, compile,
+# copy) aborts before the success line, so a failed build can never ship
+# a stale hex from a previous run.
 APP_DATA = app/loadcraft/data
 APP_VERSION_PY = app/loadcraft/_version.py
 RELEASE_VERSION ?=
@@ -75,7 +78,7 @@ version:
 	@echo "$(VERSION)"
 
 build-hex:
-	@if [ -n "$(RELEASE_VERSION)" ] && [ "$(RELEASE_VERSION)" != "$(VERSION)" ]; then \
+	@set -e; if [ -n "$(RELEASE_VERSION)" ] && [ "$(RELEASE_VERSION)" != "$(VERSION)" ]; then \
 	    echo "error: RELEASE_VERSION='$(RELEASE_VERSION)' does not match the pyproject version '$(VERSION)'"; \
 	    exit 1; fi; \
 	v="$(RELEASE_VERSION)"; [ -n "$$v" ] || v="$(VERSION)"; \
