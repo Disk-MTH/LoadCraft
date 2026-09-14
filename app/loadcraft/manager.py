@@ -148,6 +148,13 @@ class LinkManager:
             self._state = "searching"
             self._last_error = None
         if link is not None:
+            # Ask the board to stop streaming before the port goes away:
+            # otherwise it keeps the telemetry state on across the close.
+            # Fire and forget - the board's reply is dropped with the link.
+            try:
+                link.send(protocol.cmd_stream(False))
+            except LinkError:
+                pass
             link.close()
 
     # --- Flash window -------------------------------------------------------

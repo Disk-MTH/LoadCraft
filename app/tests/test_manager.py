@@ -213,6 +213,22 @@ def test_dead_link_is_dropped_and_reconnected(available, clock):
     assert len(opened) == 2
 
 
+def test_dropping_the_link_stops_streaming_on_the_board(available, clock):
+    manager, holder, _ = make_manager(available)
+    manager.run_once(clock())
+    assert manager.status()["connected"] is True
+
+    # The app enables streaming on connect; the board remembers it.
+    holder["board"].streaming = True
+
+    manager._drop_link()
+
+    # The port is released with the board told to stop streaming first.
+    assert holder["board"].streaming is False
+    assert manager.link is None
+    assert manager.status()["state"] == "searching"
+
+
 # --- Commands ----------------------------------------------------------------
 
 
